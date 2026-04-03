@@ -24,6 +24,7 @@ This is a mobile-first warehouse and quality web app for medical textiles and re
 - Next.js App Router
 - React + TypeScript
 - Tailwind CSS
+- Mobile barcode scanning with `@zxing/browser`
 - Sonner toasts
 - PDF generation with `pdf-lib`
 - Workbook import with `xlsx`
@@ -46,6 +47,13 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+## Mobile scanning notes
+
+- Camera scanning uses `@zxing/browser` rather than the browser's native `BarcodeDetector`, because iPhone browsers do not expose that API reliably.
+- Use the app over HTTPS or `localhost`, otherwise mobile browsers will block camera access.
+- The scanner asks for a user gesture before opening the camera and always keeps manual entry available as a fallback.
+- If the camera is already in use by another tab or app, close it there first and reopen the scanner.
 
 ## Environment
 

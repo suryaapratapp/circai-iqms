@@ -129,7 +129,6 @@ export function WorkflowModule({
     updateValue("code", value);
     setOpenScanner(false);
     loadPreview(value);
-    toast.success(`Captured ${value}`);
   }
 
   return (

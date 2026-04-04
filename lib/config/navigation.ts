@@ -3,6 +3,7 @@ import {
   ClipboardList,
   Gauge,
   History,
+  MoreHorizontal,
   PackageSearch,
   PackageCheck,
   PackageMinus,
@@ -19,6 +20,12 @@ interface NavigationItem {
   label: string;
   icon: typeof Gauge;
   roles: UserRole[];
+}
+
+interface MobileNavItem {
+  href: string;
+  label: string;
+  icon: typeof Gauge;
 }
 
 export const navigationItems: NavigationItem[] = [
@@ -43,12 +50,25 @@ export function getNavigationItemsForRole(role: UserRole) {
 
 export function getMobilePrimaryNavForRole(role: UserRole) {
   const preferredRoutesByRole: Record<UserRole, string[]> = {
-    admin: ["/dashboard", "/receive", "/search", "/packing", "/inventory"],
-    supervisor: ["/dashboard", "/receive", "/search", "/packing", "/inventory"],
-    operator: ["/dashboard", "/receive", "/search", "/packing", "/repair-item"]
+    admin: ["/receive", "/search", "/packing", "/inventory"],
+    supervisor: ["/receive", "/search", "/packing", "/inventory"],
+    operator: ["/receive", "/search", "/packing", "/repair-item"]
   };
 
   return getNavigationItemsForRole(role).filter((item) =>
     preferredRoutesByRole[role].includes(item.href)
   );
+}
+
+export function getMobileOverflowNavForRole(role: UserRole) {
+  const primaryHrefs = new Set(getMobilePrimaryNavForRole(role).map((item) => item.href));
+  return getNavigationItemsForRole(role).filter((item) => !primaryHrefs.has(item.href));
+}
+
+export function getMobileMoreNavItem(): MobileNavItem {
+  return {
+    href: "#mobile-more",
+    label: "More",
+    icon: MoreHorizontal
+  };
 }

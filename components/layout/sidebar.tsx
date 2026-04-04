@@ -5,17 +5,13 @@ import { usePathname } from "next/navigation";
 import { getNavigationItemsForRole } from "@/lib/config/navigation";
 import { cn } from "@/lib/utils/cn";
 import type { UserRole } from "@/lib/data/types";
-import { BrandLockup } from "@/components/layout/brand-lockup";
 
 export function Sidebar({ role }: { role: UserRole }) {
   const pathname = usePathname();
   const navigationItems = getNavigationItemsForRole(role);
 
   return (
-    <aside className="hidden w-[280px] shrink-0 lg:flex lg:flex-col lg:gap-5">
-      <Link className="glass-panel rounded-[34px] px-5 py-5" href="/dashboard" prefetch={false}>
-        <BrandLockup size="md" />
-      </Link>
+    <aside className="hidden w-[280px] shrink-0 lg:flex">
       <nav className="glass-panel flex-1 rounded-[34px] p-3">
         <div className="space-y-1.5">
           {navigationItems.map((item) => {

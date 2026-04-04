@@ -1,8 +1,6 @@
-# IQMS
+# IQMS by CIRCAI LTD.
 
-IQMS for RZ-Circular.
-
-This is a mobile-first warehouse and quality web app for medical textiles and related equipment operations. It is designed for practical floor use with large tap targets, scan-first workflows, grouped receiving, simple packing, and traceable stock control.
+This is a mobile-first warehouse and quality web app for product scanning & tracking. It is designed for practical floor use with large tap targets, scan-first workflows, grouped receiving, simple packing, and traceable stock control.
 
 ## Stack
 

@@ -6,7 +6,12 @@ import { appConfig } from "@/lib/config/app";
 export const metadata: Metadata = {
   title: `${appConfig.name} ${appConfig.brandLine}`,
   description:
-    `${appConfig.fullName} by CIRCAI LTD for RZ-Circular. Stock and quality management workflows for warehouse teams.`
+    `${appConfig.fullName} by CIRCAI LTD. Stock and quality management workflows for warehouse teams.`,
+  icons: {
+    icon: "/circai.ico",
+    shortcut: "/circai.ico",
+    apple: "/circai.ico"
+  }
 };
 
 export default function RootLayout({

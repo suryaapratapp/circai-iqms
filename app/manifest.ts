@@ -5,21 +5,16 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "IQMS by CIRCAI LTD",
     short_name: "IQMS",
     description:
-      "Inventory and Quality Management System by CIRCAI LTD for RZ-Circular.",
+      "Inventory and Quality Management System by CIRCAI LTD.",
     start_url: "/dashboard",
     display: "standalone",
     background_color: "#f4f7fb",
     theme_color: "#1d4ed8",
     icons: [
       {
-        src: "/icon-192.svg",
-        sizes: "192x192",
-        type: "image/svg+xml"
-      },
-      {
-        src: "/icon-512.svg",
-        sizes: "512x512",
-        type: "image/svg+xml"
+        src: "/circai.ico",
+        sizes: "any",
+        type: "image/x-icon"
       }
     ]
   };

@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { TransactionRecord } from "@/lib/data/types";
+import { Button } from "@/components/ui/button";
+import { inputClassName } from "@/components/ui/field";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { formatDateTime } from "@/lib/utils/format";
@@ -12,8 +14,10 @@ export function TransactionHistory({
   transactions: TransactionRecord[];
 }) {
   const [query, setQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(30);
+  const deferredQuery = useDeferredValue(query);
   const filtered = useMemo(() => {
-    const normalised = query.trim().toLowerCase();
+    const normalised = deferredQuery.trim().toLowerCase();
     if (!normalised) {
       return transactions;
     }
@@ -28,11 +32,16 @@ export function TransactionHistory({
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalised))
     );
-  }, [query, transactions]);
+  }, [deferredQuery, transactions]);
+  const visibleTransactions = filtered.slice(0, visibleCount);
+
+  useEffect(() => {
+    setVisibleCount(30);
+  }, [deferredQuery, transactions]);
 
   return (
     <div className="space-y-6">
-      <SurfaceCard className="rounded-[32px] p-6">
+      <SurfaceCard className="rounded-[34px] p-6 md:p-7">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="font-heading text-3xl font-bold text-ink">Transaction History</p>
@@ -41,7 +50,7 @@ export function TransactionHistory({
             </p>
           </div>
           <input
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-teal md:max-w-xs"
+            className={inputClassName("md:max-w-xs")}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search transaction history"
             value={query}
@@ -49,8 +58,8 @@ export function TransactionHistory({
         </div>
       </SurfaceCard>
       <div className="space-y-3">
-        {filtered.map((transaction) => (
-          <SurfaceCard className="rounded-[28px] p-5" key={transaction.transactionId}>
+        {visibleTransactions.map((transaction) => (
+          <SurfaceCard className="rounded-[30px] p-5" key={transaction.transactionId}>
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="font-semibold text-ink">{transaction.transactionType}</p>
@@ -68,6 +77,15 @@ export function TransactionHistory({
             </div>
           </SurfaceCard>
         ))}
+        {filtered.length > visibleTransactions.length ? (
+          <Button
+            className="w-full"
+            onClick={() => setVisibleCount((current) => current + 30)}
+            variant="secondary"
+          >
+            Show more transactions
+          </Button>
+        ) : null}
       </div>
     </div>
   );

@@ -12,30 +12,27 @@ import type {
   Repository,
   SearchItemResult,
   SearchShelfResult,
+  WorkflowLookupsData,
   WorkflowResponse
 } from "@/lib/data/repository";
 import {
   buildAudit,
-  buildException,
   buildTransaction,
   findShelf,
   getLocationMap,
   getShelfMap,
-  getVarianceThreshold,
   isAccessibleLocation,
-  isSupervisor,
+  getWorkflowLookupRequirements,
   normalizeText,
   requireItemByCode,
   resolveLocation
 } from "@/lib/data/repository";
 import type {
-  CycleCountRecord,
   DamageRecord,
   DatabaseShape,
   InventoryRecord,
   ItemRecord,
   PackingOrderRecord,
-  QualityCheckRecord,
   RepairRecord,
   SessionUser,
   TransactionRecord,
@@ -255,6 +252,13 @@ const localRepository: Repository = {
     await writeDatabase(database);
   },
 
+  async getAccessibleLocations(session) {
+    const database = await readDatabase();
+    return database.locations.filter((location) =>
+      session.locationIds.includes(location.locationId)
+    );
+  },
+
   async getDashboard(session): Promise<DashboardData> {
     const database = await readDatabase();
     const rows = rowsForSession(database, session);
@@ -267,11 +271,7 @@ const localRepository: Repository = {
     > = {
       admin: [
         { href: "/receive", label: "Receive" },
-        { href: "/inbound", label: "Inbound" },
-        { href: "/search-by-shelf", label: "Search by Shelf" },
-        { href: "/search-by-upc", label: "Search by SKU / UPC" },
-        { href: "/quality-check", label: "Quality Check" },
-        { href: "/cycle-count", label: "Cycle Count" },
+        { href: "/search", label: "Search" },
         { href: "/damage-item", label: "Damage Item" },
         { href: "/repair-item", label: "Repair Item" },
         { href: "/packing", label: "Pack Order" },
@@ -281,11 +281,7 @@ const localRepository: Repository = {
       ],
       supervisor: [
         { href: "/receive", label: "Receive" },
-        { href: "/inbound", label: "Inbound" },
-        { href: "/search-by-shelf", label: "Search by Shelf" },
-        { href: "/search-by-upc", label: "Search by SKU / UPC" },
-        { href: "/quality-check", label: "Quality Check" },
-        { href: "/cycle-count", label: "Cycle Count" },
+        { href: "/search", label: "Search" },
         { href: "/damage-item", label: "Damage Item" },
         { href: "/repair-item", label: "Repair Item" },
         { href: "/packing", label: "Pack Order" },
@@ -295,11 +291,7 @@ const localRepository: Repository = {
       ],
       operator: [
         { href: "/receive", label: "Receive" },
-        { href: "/inbound", label: "Inbound" },
-        { href: "/search-by-shelf", label: "Search by Shelf" },
-        { href: "/search-by-upc", label: "Search by SKU / UPC" },
-        { href: "/quality-check", label: "Quality Check" },
-        { href: "/cycle-count", label: "Cycle Count" },
+        { href: "/search", label: "Search" },
         { href: "/damage-item", label: "Damage Item" },
         { href: "/repair-item", label: "Repair Item" },
         { href: "/packing", label: "Pack Order" }
@@ -331,6 +323,29 @@ const localRepository: Repository = {
       quickActions: quickActionsByRole[session.role],
       recentActivity,
       lastAction: recentActivity[0]
+    };
+  },
+
+  async getWorkflowLookups(session, workflow): Promise<WorkflowLookupsData> {
+    const database = await readDatabase();
+    const requirements = getWorkflowLookupRequirements(workflow);
+    const locations = database.locations.filter((location) =>
+      session.locationIds.includes(location.locationId)
+    );
+
+    return {
+      locations,
+      shelves: requirements.includeShelves
+        ? database.shelves.filter((shelf) =>
+            session.locationIds.includes(shelf.locationId)
+          )
+        : undefined,
+      reasonCodes: requirements.includeReasonCodes
+        ? database.reasonCodes
+        : undefined,
+      qualityTemplates: requirements.includeQualityTemplates
+        ? database.qualityTemplates.filter((template) => template.active)
+        : undefined
     };
   },
 
@@ -425,9 +440,6 @@ const localRepository: Repository = {
       qualityResults: database.qualityChecks.filter((record) =>
         session.locationIds.includes(record.locationId)
       ),
-      cycleCounts: database.cycleCounts.filter((record) =>
-        session.locationIds.includes(record.locationId)
-      ),
       userActivity: database.transactions.filter((record) =>
         session.locationIds.includes(record.locationId)
       ),
@@ -513,246 +525,11 @@ const localRepository: Repository = {
     const notes = payload.notes ? String(payload.notes) : undefined;
     const item = code ? requireItemByCode(database, code) : undefined;
 
-    if (workflow !== "cycle-count" && workflow !== "unpack" && !item) {
+    if (workflow !== "unpack" && !item) {
       throw new Error("Item not found for the scanned code.");
     }
 
     switch (workflow) {
-      case "inbound": {
-        const quantity = parseQuantity(payload.quantity);
-        const shelfCode = parseText(payload.shelfCode || payload.actualShelfCode, "Shelf");
-        const shelf = findShelf(database, shelfCode, locationId);
-        if (!shelf) {
-          throw new Error("Shelf is not recognised for this location.");
-        }
-        const inventory = ensureInventory(database, item!, locationId);
-        if (inventory.quantityPendingInbound < quantity) {
-          throw new Error("Pending putaway quantity is too low.");
-        }
-        const previousValue = { ...inventory };
-        inventory.quantityPendingInbound -= quantity;
-        inventory.quantityAvailable += quantity;
-        inventory.shelfId = shelf.shelfId;
-        inventory.shelfCode = shelf.code;
-        inventory.status = "stored";
-        inventory.lastUpdatedAt = new Date().toISOString();
-
-        const transaction = buildTransaction({
-          item,
-          session,
-          quantity,
-          transactionType: "inbound",
-          locationId,
-          shelfCode: shelf.code,
-          notes,
-          previousValue,
-          newValue: inventory,
-          status: "stored"
-        });
-        appendTransactionAndAudit(
-          database,
-          transaction,
-          buildAudit({
-            actionType: "inbound",
-            session,
-            locationId,
-            quantity,
-            item,
-            shelfCode: shelf.code,
-            notes,
-            previousValue,
-            newValue: inventory
-          })
-        );
-        await writeDatabase(database);
-        return { message: `Moved ${quantity} units to shelf ${shelf.code}.`, item, inventory, transaction };
-      }
-
-      case "quality-check": {
-        const result = parseText(payload.result, "Quality result").toLowerCase() as QualityCheckRecord["result"];
-        const shelfCode = payload.shelfCode ? String(payload.shelfCode) : undefined;
-        const inventory = ensureInventory(database, item!, locationId, shelfCode);
-        const previousValue = { ...inventory };
-        const quantityAffected = Math.max(Number(payload.quantity || 1), 1);
-
-        if (result === "pass") {
-          inventory.status = "quality passed";
-        } else if (String(payload.disposition || "") === "repair") {
-          checkAvailable(
-            inventory,
-            quantityAffected,
-            "Available quantity is too low for repair disposition."
-          );
-          inventory.quantityAvailable -= quantityAffected;
-          inventory.quantityUnderRepair += quantityAffected;
-          inventory.status = "under repair";
-        } else if (String(payload.disposition || "") === "damaged") {
-          checkAvailable(
-            inventory,
-            quantityAffected,
-            "Available quantity is too low for damaged disposition."
-          );
-          inventory.quantityAvailable -= quantityAffected;
-          inventory.quantityDamaged += quantityAffected;
-          inventory.status = "damaged";
-        } else {
-          checkAvailable(
-            inventory,
-            quantityAffected,
-            "Available quantity is too low for quarantine."
-          );
-          inventory.quantityAvailable -= quantityAffected;
-          inventory.quantityQuarantined += quantityAffected;
-          inventory.status = result === "hold" ? "quarantined" : "quality failed";
-        }
-        inventory.lastUpdatedAt = new Date().toISOString();
-
-        const qualityCheck: QualityCheckRecord = {
-          qualityCheckId: createId("qc"),
-          itemId: item!.itemId,
-          inventoryId: inventory.inventoryId,
-          locationId,
-          shelfCode: inventory.shelfCode,
-          checklistTemplateId: parseText(payload.checklistTemplateId, "Checklist"),
-          result,
-          defectCategory: payload.defectCategory
-            ? String(payload.defectCategory)
-            : undefined,
-          disposition: payload.disposition
-            ? (String(payload.disposition) as QualityCheckRecord["disposition"])
-            : undefined,
-          notes,
-          checkedBy: session.userId,
-          checkedByName: session.fullName,
-          checkedAt: new Date().toISOString(),
-          photoFileId: payload.photoFileId ? String(payload.photoFileId) : undefined
-        };
-        database.qualityChecks.unshift(qualityCheck);
-        if (result !== "pass") {
-          database.exceptions.unshift(
-            buildException({
-              type: "failed quality check",
-              session,
-              locationId,
-              itemId: item!.itemId,
-              notes,
-              supervisorReview: true
-            })
-          );
-        }
-
-        const transaction = buildTransaction({
-          item,
-          session,
-          quantity: quantityAffected,
-          transactionType: result === "pass" ? "quality pass" : "quality fail",
-          locationId,
-          shelfCode: inventory.shelfCode,
-          notes,
-          previousValue,
-          newValue: inventory,
-          status: inventory.status
-        });
-        appendTransactionAndAudit(
-          database,
-          transaction,
-          buildAudit({
-            actionType: transaction.transactionType,
-            session,
-            locationId,
-            quantity: quantityAffected,
-            item,
-            shelfCode: inventory.shelfCode,
-            notes,
-            previousValue,
-            newValue: qualityCheck
-          })
-        );
-        await writeDatabase(database);
-        return { message: "Quality check saved.", item, inventory, qualityCheck, transaction };
-      }
-
-      case "cycle-count": {
-        const countedQuantity = parseCountedQuantity(payload.countedQuantity, "Counted quantity");
-        const reasonCode = parseText(payload.reasonCode, "Reason");
-        const record = item
-          ? ensureInventory(database, item, locationId)
-          : database.inventory.find(
-              (inventory) =>
-                inventory.locationId === locationId &&
-                inventory.shelfCode === parseText(payload.shelfCode || payload.code, "Shelf")
-            );
-        if (!record) {
-          throw new Error("No inventory record found for this cycle count.");
-        }
-        const matchedItem = item || database.items.find((entry) => entry.itemId === record.itemId);
-        const previousValue = { ...record };
-        const variance = countedQuantity - record.quantityAvailable;
-        const approvalRequired =
-          Math.abs(variance) >= getVarianceThreshold(database) && !isSupervisor(session);
-        if (!approvalRequired) {
-          record.quantityOnHand += variance;
-          record.quantityAvailable = countedQuantity;
-          record.lastUpdatedAt = new Date().toISOString();
-        }
-        const cycleCount: CycleCountRecord = {
-          cycleCountId: createId("count"),
-          itemId: matchedItem?.itemId,
-          shelfCode: record.shelfCode,
-          locationId,
-          expectedQuantity: previousValue.quantityAvailable,
-          countedQuantity,
-          variance,
-          reasonCode,
-          status: approvalRequired ? "submitted" : "approved",
-          approvalRequired,
-          approvedBy: approvalRequired ? undefined : session.userId,
-          countedBy: session.userId,
-          countedByName: session.fullName,
-          countedAt: new Date().toISOString()
-        };
-        database.cycleCounts.unshift(cycleCount);
-        const transaction = buildTransaction({
-          item: matchedItem,
-          session,
-          quantity: Math.abs(variance),
-          transactionType: "cycle count adjustment",
-          locationId,
-          shelfCode: record.shelfCode,
-          notes,
-          reasonCode,
-          previousValue,
-          newValue: approvalRequired ? cycleCount : record,
-          status: cycleCount.status
-        });
-        appendTransactionAndAudit(
-          database,
-          transaction,
-          buildAudit({
-            actionType: "cycle count",
-            session,
-            locationId,
-            quantity: Math.abs(variance),
-            item: matchedItem,
-            shelfCode: record.shelfCode,
-            referenceNumber: reasonCode,
-            notes,
-            previousValue,
-            newValue: cycleCount
-          })
-        );
-        await writeDatabase(database);
-        return {
-          message: approvalRequired
-            ? "Cycle count submitted for supervisor approval."
-            : "Cycle count saved.",
-          item: matchedItem,
-          inventory: record,
-          cycleCount,
-          transaction
-        };
-      }
-
       case "damage-item": {
         const quantity = parseQuantity(payload.quantity);
         const shelfCode = parseText(payload.shelfCode, "Shelf");

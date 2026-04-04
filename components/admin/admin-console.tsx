@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import type { AdminData } from "@/lib/data/repository";
-import { appConfig } from "@/lib/config/app";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { formatDateTime } from "@/lib/utils/format";
+import { BrandLockup } from "@/components/layout/brand-lockup";
 
 const tabs = [
   "Users",
@@ -41,12 +41,9 @@ export function AdminConsole({ data }: { data: AdminData }) {
 
   return (
     <div className="space-y-6">
-      <SurfaceCard className="rounded-[32px] p-6">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal">
-          {appConfig.name}
-        </p>
-        <p className="mt-1 text-sm font-medium text-slate-700">{appConfig.subtitle}</p>
-        <p className="font-heading text-3xl font-bold text-ink">Settings / Admin</p>
+      <SurfaceCard className="rounded-[34px] p-6 md:p-7">
+        <BrandLockup size="sm" />
+        <p className="mt-4 font-heading text-3xl font-bold text-ink">Settings / Admin</p>
         <p className="mt-2 text-sm text-slate-600">
           Manage authorised users, shelves, product master data, checklist templates, and stock imports.
         </p>
@@ -64,16 +61,16 @@ export function AdminConsole({ data }: { data: AdminData }) {
               type="file"
             />
           </label>
-          <div className="rounded-2xl bg-blue-50 px-4 py-3 text-sm text-slate-700">
+          <div className="rounded-[20px] border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-slate-700">
             Supports CSV, XLSX, duplicate handling, and shelf/SKU/quantity mapping.
           </div>
         </div>
         <div className="mt-5 flex flex-wrap gap-2">
           {tabs.map((tab) => (
             <button
-              className={`rounded-2xl px-4 py-3 text-sm font-semibold ${
+              className={`rounded-[18px] px-4 py-3 text-sm font-semibold ${
                 activeTab === tab
-                  ? "bg-ink text-white"
+                  ? "bg-blue-600 text-white"
                   : "bg-slate-100 text-slate-600"
               }`}
               key={tab}

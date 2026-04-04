@@ -24,9 +24,6 @@ export type RepairStatus =
   | "returned to stock";
 export type WorkflowType =
   | "receive"
-  | "inbound"
-  | "quality-check"
-  | "cycle-count"
   | "damage-item"
   | "repair-item"
   | "packing"
@@ -176,7 +173,9 @@ export interface ReceiptItemRecord {
   productName: string;
   quantityReceived: number;
   shelfCode?: string;
-  conditionOnArrival: string;
+  qualityResult?: QualityResult;
+  disposition?: QualityCheckRecord["disposition"];
+  defectCategory?: string;
   batchLot?: string;
   expiryDate?: string;
   notes?: string;

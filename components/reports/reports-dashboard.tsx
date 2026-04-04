@@ -67,20 +67,6 @@ export function ReportsDashboard({ reports }: { reports: ReportsData }) {
         <SurfaceCard className="rounded-[32px] p-6">
           <p className="font-heading text-2xl font-bold text-ink">Operational exceptions</p>
           <div className="mt-5 space-y-3">
-            {reports.cycleCounts
-              .filter((record) => record.variance !== 0)
-              .slice(0, 6)
-              .map((record) => (
-                <div className="rounded-2xl bg-amber-50 p-4" key={record.cycleCountId}>
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold text-amber-900">Cycle count variance</p>
-                    <StatusBadge value={record.status} />
-                  </div>
-                  <p className="mt-2 text-sm text-amber-800">
-                    Variance {record.variance} on {record.shelfCode || "unassigned shelf"}
-                  </p>
-                </div>
-              ))}
             {reports.repairItems.slice(0, 4).map((record) => (
               <div className="rounded-2xl bg-slate-100 p-4" key={record.repairId}>
                 <div className="flex items-center justify-between gap-3">

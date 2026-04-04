@@ -2,7 +2,6 @@ import { appConfig } from "@/lib/config/app";
 import { createId } from "@/lib/utils/id";
 import type {
   AuditRecord,
-  CycleCountRecord,
   DamageRecord,
   DatabaseShape,
   ExceptionRecord,
@@ -47,6 +46,13 @@ export interface LookupsData {
   >[];
 }
 
+export interface WorkflowLookupsData {
+  locations: LocationRecord[];
+  shelves?: ShelfRecord[];
+  reasonCodes?: ReasonCodeRecord[];
+  qualityTemplates?: QualityTemplate[];
+}
+
 export interface InventoryListItem {
   item: ItemRecord;
   inventory: InventoryRecord;
@@ -71,7 +77,6 @@ export interface ReportsData {
   damagedItems: DamageRecord[];
   repairItems: RepairRecord[];
   qualityResults: QualityCheckRecord[];
-  cycleCounts: CycleCountRecord[];
   userActivity: TransactionRecord[];
   dailyTransactions: TransactionRecord[];
   packingOrders: PackingOrderRecord[];
@@ -109,7 +114,6 @@ export interface WorkflowResponse {
   inventory?: InventoryRecord;
   transaction?: TransactionRecord;
   qualityCheck?: QualityCheckRecord;
-  cycleCount?: CycleCountRecord;
   damage?: DamageRecord;
   repair?: RepairRecord;
   unpack?: UnpackRecord;
@@ -139,7 +143,12 @@ export interface Repository {
     googleSubject: string
   ): Promise<UserRecord>;
   updateLastLogin(userId: string): Promise<void>;
+  getAccessibleLocations(session: SessionUser): Promise<LocationRecord[]>;
   getDashboard(session: SessionUser): Promise<DashboardData>;
+  getWorkflowLookups(
+    session: SessionUser,
+    workflow: WorkflowType
+  ): Promise<WorkflowLookupsData>;
   getLookups(session: SessionUser): Promise<LookupsData>;
   searchShelf(code: string, session: SessionUser): Promise<SearchShelfResult>;
   searchItem(query: string, session: SessionUser): Promise<SearchItemResult>;
@@ -205,6 +214,37 @@ export function getLocationMap(locations: LocationRecord[]) {
 
 export function getShelfMap(shelves: ShelfRecord[]) {
   return new Map(shelves.map((shelf) => [shelf.shelfId, shelf]));
+}
+
+export function getWorkflowLookupRequirements(workflow: WorkflowType) {
+  switch (workflow) {
+    case "receive":
+      return {
+        includeShelves: true,
+        includeReasonCodes: false,
+        includeQualityTemplates: false
+      };
+    case "packing":
+      return {
+        includeShelves: true,
+        includeReasonCodes: false,
+        includeQualityTemplates: false
+      };
+    case "damage-item":
+    case "repair-item":
+    case "unpack":
+      return {
+        includeShelves: true,
+        includeReasonCodes: true,
+        includeQualityTemplates: false
+      };
+    default:
+      return {
+        includeShelves: false,
+        includeReasonCodes: false,
+        includeQualityTemplates: false
+      };
+  }
 }
 
 export function buildTransaction(params: {

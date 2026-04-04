@@ -1,10 +1,11 @@
 import { WorkflowModule } from "@/components/workflows/workflow-module";
-import { getRepository } from "@/lib/data";
-import { requireSession } from "@/lib/auth/session";
+import { getCachedSession, getCachedWorkflowLookups } from "@/lib/data/server";
 
 export default async function RepairItemPage() {
-  const session = await requireSession();
-  const lookups = await getRepository().getLookups(session);
+  const [session, lookups] = await Promise.all([
+    getCachedSession(),
+    getCachedWorkflowLookups("repair-item")
+  ]);
   return (
     <WorkflowModule
       initialLocationId={session.assignedLocationId}

@@ -35,7 +35,7 @@ export function StatusBadge({ value }: { value: string }) {
   return (
     <span
       className={cn(
-        "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize",
+        "inline-flex rounded-full border border-transparent px-2.5 py-1 text-[11px] font-semibold capitalize tracking-[0.02em]",
         toneMap[value] || "bg-slate-100 text-slate-700"
       )}
     >

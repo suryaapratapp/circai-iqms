@@ -20,14 +20,14 @@ const config: Config = {
         panel: "#ffffff"
       },
       boxShadow: {
-        warehouse: "0 14px 40px rgba(15, 23, 42, 0.08)"
+        warehouse: "0 20px 48px rgba(15, 23, 42, 0.08)"
       },
       backgroundImage: {
         "floor-grid":
           "linear-gradient(rgba(29, 78, 216, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(29, 78, 216, 0.05) 1px, transparent 1px)"
       },
       fontFamily: {
-        heading: ['ui-rounded', '"Trebuchet MS"', '"Avenir Next"', "sans-serif"],
+        heading: ['"Avenir Next"', '"Helvetica Neue"', '"Segoe UI"', "sans-serif"],
         body: ['"Avenir Next"', '"Segoe UI"', "sans-serif"]
       }
     }

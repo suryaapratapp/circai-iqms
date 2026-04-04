@@ -8,8 +8,10 @@ interface FieldProps {
 
 export function Field({ label, helperText, children }: FieldProps) {
   return (
-    <label className="flex flex-col gap-2">
-      <span className="text-sm font-semibold text-slate-700">{label}</span>
+    <label className="flex flex-col gap-2.5">
+      <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+        {label}
+      </span>
       {children}
       {helperText ? <span className="text-xs text-slate-500">{helperText}</span> : null}
     </label>
@@ -18,7 +20,7 @@ export function Field({ label, helperText, children }: FieldProps) {
 
 export function inputClassName(extra?: string) {
   return cn(
-    "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-ink shadow-sm outline-none transition focus:border-teal focus:ring-2 focus:ring-teal/20",
+    "w-full rounded-[18px] border border-slate-200 bg-slate-50/80 px-4 py-3.5 text-sm text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100",
     extra
   );
 }

@@ -4,15 +4,27 @@ import type {
   DashboardData,
   InventoryListItem,
   LookupsData,
+  PackedOrderDetail,
+  PackedOrderListItem,
   RegisterInput,
   ReportsData,
   Repository,
   SearchItemResult,
   SearchShelfResult,
+  WorkflowLookupsData,
   WorkflowResponse
 } from "@/lib/data/repository";
+import { getWorkflowLookupRequirements } from "@/lib/data/repository";
 import { verifyPassword } from "@/lib/auth/password";
-import type { SessionUser, UserRecord, WorkflowType } from "@/lib/data/types";
+import type {
+  LocationRecord,
+  SessionUser,
+  TransactionRecord,
+  UserRecord,
+  WorkflowType
+} from "@/lib/data/types";
+
+const readCache = new Map<string, { expiresAt: number; value: unknown }>();
 
 function getBaseUrl() {
   const url = process.env.GOOGLE_APPS_SCRIPT_URL;
@@ -56,6 +68,36 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return data as T;
 }
 
+function getCacheKey(path: string, body?: string) {
+  return `${path}::${body || ""}`;
+}
+
+async function cachedRequest<T>(
+  path: string,
+  ttlMs: number,
+  options?: RequestInit
+): Promise<T> {
+  const body =
+    typeof options?.body === "string" ? options.body : JSON.stringify(options?.body || {});
+  const cacheKey = getCacheKey(path, body);
+  const now = Date.now();
+  const cached = readCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > now) {
+    return cached.value as T;
+  }
+
+  const value = await request<T>(path, {
+    ...options,
+    body
+  });
+  readCache.set(cacheKey, {
+    expiresAt: now + ttlMs,
+    value
+  });
+  return value;
+}
+
 function normaliseUser(candidate: UserRecord): UserRecord {
   return {
     ...candidate,
@@ -70,6 +112,10 @@ function normaliseUser(candidate: UserRecord): UserRecord {
         ? candidate.googleLinked
         : String(candidate.googleLinked).toLowerCase() === "true"
   };
+}
+
+export function clearAppsScriptRepositoryCache() {
+  readCache.clear();
 }
 
 const appsScriptRepository: Repository = {
@@ -117,14 +163,30 @@ const appsScriptRepository: Repository = {
       body: JSON.stringify({ userId })
     });
   },
-  getDashboard(session: SessionUser) {
-    return request<DashboardData>("getDashboard", {
+  getAccessibleLocations(session: SessionUser) {
+    return cachedRequest<LocationRecord[]>("getLocations", 5 * 60 * 1000, {
       method: "POST",
       body: JSON.stringify({ session })
     });
   },
+  getDashboard(session: SessionUser) {
+    return cachedRequest<DashboardData>("getDashboard", 15 * 1000, {
+      method: "POST",
+      body: JSON.stringify({ session })
+    });
+  },
+  getWorkflowLookups(session: SessionUser, workflow: WorkflowType) {
+    return cachedRequest<WorkflowLookupsData>("getWorkflowLookups", 60 * 1000, {
+      method: "POST",
+      body: JSON.stringify({
+        session,
+        workflow,
+        ...getWorkflowLookupRequirements(workflow)
+      })
+    });
+  },
   getLookups(session: SessionUser) {
-    return request<LookupsData>("getLookups", {
+    return cachedRequest<LookupsData>("getLookups", 60 * 1000, {
       method: "POST",
       body: JSON.stringify({ session })
     });
@@ -166,19 +228,19 @@ const appsScriptRepository: Repository = {
     });
   },
   listTransactions(session: SessionUser) {
-    return request("getTransactions", {
+    return cachedRequest<TransactionRecord[]>("getTransactions", 15 * 1000, {
       method: "POST",
       body: JSON.stringify({ session })
     });
   },
   listPackedOrders(session: SessionUser) {
-    return request("getPackedOrders", {
+    return cachedRequest<PackedOrderListItem[]>("getPackedOrders", 15 * 1000, {
       method: "POST",
       body: JSON.stringify({ session })
     });
   },
   getPackedOrder(packingOrderId: string, session: SessionUser) {
-    return request("getPackedOrder", {
+    return cachedRequest<PackedOrderDetail | null>("getPackedOrder", 15 * 1000, {
       method: "POST",
       body: JSON.stringify({ packingOrderId, session })
     });
@@ -190,9 +252,6 @@ const appsScriptRepository: Repository = {
   ) {
     const pathByWorkflow: Record<WorkflowType, string> = {
       receive: "receiveStock",
-      inbound: "inboundStock",
-      "quality-check": "qualityCheck",
-      "cycle-count": "cycleCount",
       "damage-item": "damageItem",
       "repair-item": "repairItem",
       packing: "packOrder",
@@ -201,6 +260,9 @@ const appsScriptRepository: Repository = {
     return request<WorkflowResponse>(pathByWorkflow[workflow], {
       method: "POST",
       body: JSON.stringify({ workflow, payload, session })
+    }).then((result) => {
+      clearAppsScriptRepositoryCache();
+      return result;
     });
   }
 };

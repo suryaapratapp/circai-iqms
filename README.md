@@ -10,8 +10,9 @@ This is a mobile-first warehouse and quality web app for medical textiles and re
 - British English terminology throughout the visible product
 - Standard sign-in plus Google Sign-In / account linking hooks
 - Simplified dashboard with welcome, current location, quick actions, recent activity, and last action
-- Receive flow redesigned around Supplier Name, PO Number, optional PO photo, and grouped receipt lines
-- Inbound, Search by Shelf, Search by SKU / UPC, Quality Check, Cycle Count, Damage Item, Repair Item, Pack Order, Unpack, Inventory, Transaction History, Reports, Settings / Admin, and Profile screens
+- Unified `Receive` flow with Supplier Name, PO Number, optional PO photo, quick quality decisions, and grouped receipt lines
+- Unified `Search` flow for shelf search and item search on one screen
+- Damage Item, Repair Item, Pack Order, Packed Orders, Unpack, Inventory, Transaction History, Reports, Settings / Admin, and Profile screens
 - Mobile scan modal with rear-camera preference and manual entry fallback
 - Pack Order flow with confirmation and generated PDF packing slip
 - Damage flow that reduces available stock immediately
@@ -154,10 +155,61 @@ Required setup steps:
    If the `Users` sheet is empty, the Apps Script bootstrap seeds the three demo RZ-Circular accounts automatically.
 11. Test the live flows in this order:
    - sign in
-   - receive stock
+   - receive stock with quick quality result and shelf placement
+   - search by shelf
+   - search by item or SKU
    - pack an order
-   - damage an item
    - review packed orders and open the packing slip PDF
+   - damage an item
+   - repair or unpack an item if required
+
+## Functional changes after this refactor
+
+- `Inbound` has been removed from the current app flow.
+- `Search by Shelf` and `Search by SKU / UPC` have been merged into a single `Search` module.
+- `Quality Check` is no longer a separate standalone module. It now happens as a quick pass / fail / hold decision inside `Receive`.
+- `Cycle Count` has been removed from the current UI flow.
+- Wherever a shelf is required, the app now supports:
+  - shelf scanning with the shared mobile camera scanner
+  - shelf selection from the current location shelf list
+  - manual fallback entry when needed
+
+## Google Sheets changes
+
+- No new core tabs are required if you already created the current schema.
+- Update `ReceiptItems` to include:
+  - `qualityResult`
+  - `disposition`
+  - `defectCategory`
+- `Inventory.quantityPendingInbound` can stay in the sheet for backwards compatibility, but the simplified flow now keeps it at `0`.
+- `CycleCounts` is no longer used by the current frontend. Keep the tab only for legacy data if you want it.
+
+## Apps Script changes
+
+- Remove or stop using any old `inboundStock` route from your Apps Script deployment.
+- Remove or stop using any old standalone `qualityCheck` and `cycleCount` routes from your Apps Script deployment.
+- Keep or add these active routes:
+  - `receiveStock`
+  - `searchByShelf`
+  - `searchBySku`
+  - `packOrder`
+  - `getPackedOrders`
+  - `damageItem`
+  - `repairItem`
+  - `unpackOrder`
+- Update `receiveStock` so each receipt line includes:
+  - item code
+  - shelf code
+  - quantity received
+  - `qualityResult` as `pass`, `fail`, or `hold`
+  - optional `disposition`
+  - optional `defectCategory`
+  - optional `batchLot`, `expiryDate`, and `notes`
+- `receiveStock` should now:
+  - place passing stock directly onto the selected shelf
+  - route held or failed stock into quarantine, damage, or repair status
+  - write `Receipts`, `ReceiptItems`, `QualityChecks`, `Transactions`, and `AuditTrail`
+- The frontend now presents search as one page, but the Apps Script side can still keep `searchByShelf` and `searchBySku` as separate endpoints behind that single screen.
 
 Implementation note:
 

@@ -5,12 +5,17 @@ import { AlertTriangle, CheckCircle2, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { workflowDefinitions } from "@/lib/config/workflows";
 import type { WorkflowType } from "@/lib/data/types";
-import type { LookupsData, SearchItemResult, WorkflowResponse } from "@/lib/data/repository";
+import type {
+  SearchItemResult,
+  WorkflowLookupsData,
+  WorkflowResponse
+} from "@/lib/data/repository";
 import { Button } from "@/components/ui/button";
 import { Field, inputClassName } from "@/components/ui/field";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { ScannerModal } from "@/components/workflows/scanner-modal";
+import { ShelfInput } from "@/components/workflows/shelf-input";
 import { formatDateTime, formatQuantity } from "@/lib/utils/format";
 
 type FormValue = string | boolean;
@@ -33,7 +38,7 @@ export function WorkflowModule({
   initialLocationId
 }: {
   workflow: WorkflowType;
-  lookups: LookupsData;
+  lookups: WorkflowLookupsData;
   initialLocationId: string;
 }) {
   const definition = workflowDefinitions[workflow];
@@ -52,20 +57,25 @@ export function WorkflowModule({
         label: location.name,
         value: location.locationId
       })),
-      reasonCodes: lookups.reasonCodes.map((reasonCode) => ({
+      reasonCodes: (lookups.reasonCodes || []).map((reasonCode) => ({
         label: `${reasonCode.code} • ${reasonCode.label}`,
         value: reasonCode.code
       })),
-      qualityTemplates: lookups.qualityTemplates.map((template) => ({
+      qualityTemplates: (lookups.qualityTemplates || []).map((template) => ({
         label: template.name,
         value: template.templateId
       })),
-      users: lookups.users.map((user) => ({
-        label: user.fullName,
-        value: user.fullName
-      }))
+      users: []
     }),
     [lookups]
+  );
+  const availableShelves = useMemo(
+    () =>
+      (lookups.shelves || []).filter(
+        (shelf) =>
+          shelf.locationId === String(values.locationId || initialLocationId)
+      ),
+    [initialLocationId, lookups.shelves, values.locationId]
   );
 
   async function loadPreview(code: string) {
@@ -132,11 +142,11 @@ export function WorkflowModule({
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-      <SurfaceCard className="rounded-[32px] p-6">
+    <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+      <SurfaceCard className="rounded-[34px] p-6 md:p-7">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <div className="inline-flex rounded-full bg-teal/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-teal">
+            <div className="inline-flex rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-teal">
               {definition.badge}
             </div>
             <h2 className="mt-3 font-heading text-3xl font-bold text-ink">
@@ -195,6 +205,12 @@ export function WorkflowModule({
                       <span>{value ? "Enabled" : "Disabled"}</span>
                       <span>{value ? "Yes" : "No"}</span>
                     </button>
+                  ) : field.name.toLowerCase().includes("shelf") ? (
+                    <ShelfInput
+                      onChange={(nextValue) => updateValue(field.name, nextValue)}
+                      shelves={availableShelves}
+                      value={String(value || "")}
+                    />
                   ) : (
                     <div className="flex gap-3">
                       <input
@@ -227,11 +243,13 @@ export function WorkflowModule({
           })}
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Button disabled={pending} onClick={handleSubmit}>
+        <div className="sticky bottom-24 mt-6 rounded-[24px] border border-slate-200 bg-white/95 p-3 shadow-[0_18px_40px_rgba(15,23,42,0.08)] lg:static lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
+          <div className="flex flex-col gap-3 sm:flex-row">
+          <Button className="w-full sm:w-auto" disabled={pending} onClick={handleSubmit}>
             {pending ? "Saving..." : `Confirm ${definition.title}`}
           </Button>
           <Button
+            className="w-full sm:w-auto"
             onClick={() => {
               setValues(defaultValues(initialLocationId));
               setPreview(null);
@@ -241,12 +259,13 @@ export function WorkflowModule({
           >
             Reset
           </Button>
+          </div>
         </div>
       </SurfaceCard>
 
       <div className="space-y-6">
         <SurfaceCard className="rounded-[32px] p-6">
-          <p className="font-heading text-xl font-bold text-ink">Workflow rules</p>
+          <p className="font-heading text-xl font-bold text-ink">Before you confirm</p>
           <div className="mt-4 space-y-3">
             {definition.rules.map((rule) => (
               <div className="flex gap-3 text-sm text-slate-600" key={rule}>
@@ -272,13 +291,13 @@ export function WorkflowModule({
                 <StatusBadge value={preview.item.category} />
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-2xl bg-slate-100 p-3">
+                <div className="rounded-[20px] bg-slate-100 p-3">
                   <p className="text-slate-500">Available</p>
                   <p className="text-lg font-semibold text-ink">
                     {formatQuantity(preview.matches[0].inventory.quantityAvailable)}
                   </p>
                 </div>
-                <div className="rounded-2xl bg-slate-100 p-3">
+                <div className="rounded-[20px] bg-slate-100 p-3">
                   <p className="text-slate-500">Shelf</p>
                   <p className="text-lg font-semibold text-ink">
                     {preview.matches[0].inventory.shelfCode || "Pending"}
@@ -308,7 +327,7 @@ export function WorkflowModule({
               </div>
             </div>
             {lastResponse.transaction ? (
-              <div className="mt-4 rounded-2xl bg-slate-100 p-4 text-sm text-slate-700">
+              <div className="mt-4 rounded-[20px] bg-slate-100 p-4 text-sm text-slate-700">
                 <p>
                   {lastResponse.transaction.transactionType} • {lastResponse.transaction.referenceNumber || "No ref"}
                 </p>

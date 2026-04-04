@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
-import { getRepository } from "@/lib/data";
+import { clearRepositoryCache, getRepository } from "@/lib/data";
 import { getServerSession } from "@/lib/auth/session";
 import type { WorkflowType } from "@/lib/data/types";
 
 const supportedWorkflows: WorkflowType[] = [
-  "receive",
-  "inbound",
-  "quality-check",
-  "cycle-count",
   "damage-item",
   "repair-item",
   "packing",
@@ -39,6 +35,7 @@ export async function POST(
       payload,
       session
     );
+    clearRepositoryCache();
     return NextResponse.json(result);
   } catch (error) {
     const message =

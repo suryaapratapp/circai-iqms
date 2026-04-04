@@ -1,9 +1,9 @@
 import { InventoryBoard } from "@/components/inventory/inventory-board";
 import { getRepository } from "@/lib/data";
-import { requireSession } from "@/lib/auth/session";
+import { getCachedSession } from "@/lib/data/server";
 
 export default async function InventoryPage() {
-  const session = await requireSession();
+  const session = await getCachedSession();
   const rows = await getRepository().listInventory(session);
 
   return <InventoryBoard rows={rows} />;

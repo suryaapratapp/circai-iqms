@@ -9,13 +9,13 @@ export function EmptyState({
   description: string;
 }) {
   return (
-    <SurfaceCard className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-      <div className="rounded-full bg-slate-100 p-4 text-slate-500">
+    <SurfaceCard className="flex flex-col items-center gap-4 rounded-[32px] px-6 py-12 text-center">
+      <div className="rounded-[22px] bg-blue-50 p-4 text-teal">
         <SearchX className="h-7 w-7" />
       </div>
       <div>
-        <p className="font-heading text-lg font-semibold text-ink">{title}</p>
-        <p className="mt-1 text-sm text-slate-600">{description}</p>
+        <p className="font-heading text-xl font-semibold text-ink">{title}</p>
+        <p className="mt-2 max-w-md text-sm text-slate-600">{description}</p>
       </div>
     </SurfaceCard>
   );

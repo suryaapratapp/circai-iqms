@@ -27,7 +27,7 @@ Create one spreadsheet and add these tabs with the exact headers below.
 `receiptId,poNumber,supplierName,poPhotoFileId,locationId,receivedBy,receivedByName,receivedAt,totalLines,totalQuantity,notes`
 
 ## ReceiptItems
-`receiptItemId,receiptId,itemId,sku,productName,quantityReceived,shelfCode,conditionOnArrival,batchLot,expiryDate,notes`
+`receiptItemId,receiptId,itemId,sku,productName,quantityReceived,shelfCode,qualityResult,disposition,defectCategory,batchLot,expiryDate,notes`
 
 ## QualityTemplates
 `templateId,category,name,checklist,samplingMode,active`
@@ -40,9 +40,6 @@ Create one spreadsheet and add these tabs with the exact headers below.
 
 ## RepairLog
 `repairId,itemId,locationId,shelfCode,quantity,repairReason,repairStatus,assignedTo,notes,createdBy,createdByName,updatedAt`
-
-## CycleCounts
-`cycleCountId,itemId,shelfCode,locationId,expectedQuantity,countedQuantity,variance,reasonCode,status,approvalRequired,approvedBy,countedBy,countedByName,countedAt`
 
 ## PackingOrders
 `packingOrderId,orderNumber,locationId,packedBy,packedByName,packedAt,notes,totalLines,totalQuantity,pdfFileId`
@@ -75,3 +72,5 @@ Create one spreadsheet and add these tabs with the exact headers below.
 - Use UUIDs for identifiers.
 - Use `Units` as the normal quantity unit for imported RZ-Circular stock.
 - If the `Users` sheet is empty on first Apps Script request, the demo bootstrap seeds the three RZ-Circular demo users plus matching roles and locations automatically.
+- `quantityPendingInbound` remains in `Inventory` only for backwards compatibility. In the current simplified receive flow it should remain `0`.
+- `CycleCounts` is no longer required by the current frontend flow. Keep the tab only if you need historical data or a later custom counting process.

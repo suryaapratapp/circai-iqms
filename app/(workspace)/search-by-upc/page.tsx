@@ -1,5 +1,5 @@
-import { SearchModule } from "@/components/workflows/search-module";
+import { redirect } from "next/navigation";
 
 export default function SearchByUpcPage() {
-  return <SearchModule mode="upc" />;
+  redirect("/search");
 }

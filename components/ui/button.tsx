@@ -16,12 +16,13 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/60 disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex min-h-11 items-center justify-center rounded-[18px] px-4 py-3 text-sm font-semibold transition duration-200 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 disabled:cursor-not-allowed disabled:opacity-50",
         variant === "primary" &&
-          "bg-ink text-white shadow-warehouse hover:bg-slate-800",
+          "bg-teal text-white shadow-[0_16px_30px_rgba(29,78,216,0.22)] hover:bg-pine",
         variant === "secondary" &&
-          "bg-teal/10 text-teal hover:bg-teal/15",
-        variant === "ghost" && "bg-white/70 text-ink hover:bg-white",
+          "border border-blue-100 bg-blue-50 text-teal hover:bg-blue-100",
+        variant === "ghost" &&
+          "border border-slate-200 bg-white/90 text-ink hover:border-blue-100 hover:bg-blue-50/80",
         variant === "danger" && "bg-rose-600 text-white hover:bg-rose-700",
         className
       )}

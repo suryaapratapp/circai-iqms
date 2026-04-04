@@ -11,7 +11,6 @@ export default function LoginPage() {
   return (
     <AuthCard
       description=""
-      showDeveloperBranding
       footer={
         <div className="space-y-4">
           <GoogleSignInButton />

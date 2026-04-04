@@ -1,10 +1,11 @@
 import { ReceiveModule } from "@/components/workflows/receive-module";
-import { getRepository } from "@/lib/data";
-import { requireSession } from "@/lib/auth/session";
+import { getCachedSession, getCachedWorkflowLookups } from "@/lib/data/server";
 
 export default async function ReceivePage() {
-  const session = await requireSession();
-  const lookups = await getRepository().getLookups(session);
+  const [session, lookups] = await Promise.all([
+    getCachedSession(),
+    getCachedWorkflowLookups("receive")
+  ]);
   return (
     <ReceiveModule
       initialLocationId={session.assignedLocationId}

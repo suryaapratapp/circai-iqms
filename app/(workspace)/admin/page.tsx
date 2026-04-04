@@ -1,10 +1,10 @@
 import { AdminConsole } from "@/components/admin/admin-console";
 import { getRepository } from "@/lib/data";
-import { requireSession } from "@/lib/auth/session";
+import { getCachedSession } from "@/lib/data/server";
 import { SurfaceCard } from "@/components/ui/surface-card";
 
 export default async function AdminPage() {
-  const session = await requireSession();
+  const session = await getCachedSession();
 
   try {
     const data = await getRepository().getAdminData(session);

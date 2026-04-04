@@ -29,6 +29,8 @@ const CONFIG = {
   }
 };
 
+const RUNTIME_RECORD_CACHE = {};
+
 const DEMO_LOCATIONS = [
   {
     locationId: "loc_bengaluru-main-hub",
@@ -74,13 +76,10 @@ const DEMO_ROLES = [
       "reports",
       "approvals",
       "receive",
-      "inbound",
       "search",
-      "quality",
       "damage",
       "repair",
-      "packing",
-      "cycle-count"
+      "packing"
     ]
   },
   {
@@ -89,13 +88,10 @@ const DEMO_ROLES = [
     description: "Operational oversight, approvals, and stock control.",
     permissions: [
       "receive",
-      "inbound",
       "search",
-      "quality",
       "damage",
       "repair",
       "packing",
-      "cycle-count",
       "approvals",
       "inventory",
       "transactions",
@@ -110,13 +106,10 @@ const DEMO_ROLES = [
     description: "Day-to-day warehouse execution on mobile devices.",
     permissions: [
       "receive",
-      "inbound",
       "search",
-      "quality",
       "packing",
       "damage",
-      "repair",
-      "cycle-count"
+      "repair"
     ]
   }
 ];
@@ -233,6 +226,8 @@ function routeRequest_(path, method, payload) {
 
     case "getDashboard":
       return getDashboard_(payload.session);
+    case "getWorkflowLookups":
+      return getWorkflowLookups_(payload.session, payload);
     case "getLookups":
       return getLookups_(payload.session);
     case "searchByShelf":
@@ -256,12 +251,6 @@ function routeRequest_(path, method, payload) {
 
     case "receiveStock":
       return receiveStock_(payload);
-    case "inboundStock":
-      return inboundStock_(payload);
-    case "qualityCheck":
-      return qualityCheck_(payload);
-    case "cycleCount":
-      return cycleCount_(payload);
     case "damageItem":
       return damageItem_(payload);
     case "repairItem":
@@ -371,27 +360,73 @@ function getSheet_(sheetName) {
 }
 
 function getHeaders_(sheetName) {
-  const values = getSheet_(sheetName).getDataRange().getValues();
-  if (!values.length) {
+  const sheet = getSheet_(sheetName);
+  const lastColumn = sheet.getLastColumn();
+  if (!lastColumn) {
     throw new Error("Missing header row on sheet: " + sheetName);
   }
-  return values[0];
+  return sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+}
+
+function isReferenceSheet_(sheetName) {
+  return [
+    CONFIG.SHEETS.ROLES,
+    CONFIG.SHEETS.LOCATIONS,
+    CONFIG.SHEETS.SHELVES,
+    CONFIG.SHEETS.QUALITY_TEMPLATES,
+    CONFIG.SHEETS.REASON_CODES,
+    CONFIG.SHEETS.SETTINGS
+  ].indexOf(sheetName) > -1;
+}
+
+function getSheetCacheKey_(sheetName) {
+  return "records::" + sheetName;
+}
+
+function clearSheetCaches_(sheetName) {
+  delete RUNTIME_RECORD_CACHE[sheetName];
+  CacheService.getScriptCache().remove(getSheetCacheKey_(sheetName));
 }
 
 function getRecords_(sheetName) {
+  if (RUNTIME_RECORD_CACHE[sheetName]) {
+    return RUNTIME_RECORD_CACHE[sheetName];
+  }
+
+  const cacheKey = getSheetCacheKey_(sheetName);
+  if (isReferenceSheet_(sheetName)) {
+    const cached = CacheService.getScriptCache().get(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      RUNTIME_RECORD_CACHE[sheetName] = parsed;
+      return parsed;
+    }
+  }
+
   const values = getSheet_(sheetName).getDataRange().getValues();
   if (values.length < 2) {
+    RUNTIME_RECORD_CACHE[sheetName] = [];
     return [];
   }
 
   const headers = values[0];
-  return values.slice(1).map(function (row) {
+  const records = values.slice(1).map(function (row) {
     const record = {};
     headers.forEach(function (header, index) {
       record[header] = row[index];
     });
     return record;
   });
+
+  RUNTIME_RECORD_CACHE[sheetName] = records;
+  if (isReferenceSheet_(sheetName)) {
+    try {
+      CacheService.getScriptCache().put(cacheKey, JSON.stringify(records), 300);
+    } catch (_error) {
+      // Ignore cache serialisation limits and continue with live sheet data.
+    }
+  }
+  return records;
 }
 
 function appendRecord_(sheetName, record) {
@@ -401,6 +436,7 @@ function appendRecord_(sheetName, record) {
     return serialiseForSheet_(record[header]);
   });
   sheet.appendRow(row);
+  clearSheetCaches_(sheetName);
 }
 
 function updateRecord_(sheetName, idField, idValue, nextRecord) {
@@ -422,6 +458,7 @@ function updateRecord_(sheetName, idField, idValue, nextRecord) {
         return values[rowIndex][headerIndex];
       });
       sheet.getRange(rowIndex + 1, 1, 1, headers.length).setValues([row]);
+      clearSheetCaches_(sheetName);
       return;
     }
   }
@@ -976,6 +1013,60 @@ function getTransactions_(session) {
   return scopeRecords_(getTransactionsRaw_(), requireSession_(session), "locationId");
 }
 
+function getRecentTransactions_(session, limit) {
+  const activeSession = requireSession_(session);
+  const sheet = getSheet_(CONFIG.SHEETS.TRANSACTIONS);
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+
+  if (lastRow < 2 || !lastColumn) {
+    return [];
+  }
+
+  const headers = getHeaders_(CONFIG.SHEETS.TRANSACTIONS);
+  const readWindow = Math.max(limit * 12, 120);
+  const startRow = Math.max(2, lastRow - readWindow + 1);
+  const values = sheet
+    .getRange(startRow, 1, lastRow - startRow + 1, lastColumn)
+    .getValues();
+
+  return values
+    .map(function (row) {
+      const record = {};
+      headers.forEach(function (header, index) {
+        record[header] = row[index];
+      });
+      return {
+        transactionId: String(record.transactionId || ""),
+        itemId: record.itemId ? String(record.itemId) : "",
+        itemName: record.itemName ? String(record.itemName) : "",
+        sku: record.sku ? String(record.sku) : "",
+        upc: record.upc ? String(record.upc) : "",
+        transactionType: String(record.transactionType || ""),
+        quantity: parseNumber_(record.quantity, 0),
+        locationId: String(record.locationId || ""),
+        shelfCode: record.shelfCode ? String(record.shelfCode) : "",
+        userId: String(record.userId || ""),
+        userName: String(record.userName || ""),
+        role: String(record.role || "operator"),
+        timestamp: String(record.timestamp || ""),
+        notes: record.notes ? String(record.notes) : "",
+        referenceNumber: record.referenceNumber ? String(record.referenceNumber) : "",
+        reasonCode: record.reasonCode ? String(record.reasonCode) : "",
+        previousValue: record.previousValue ? String(record.previousValue) : "",
+        newValue: record.newValue ? String(record.newValue) : "",
+        status: String(record.status || "logged")
+      };
+    })
+    .filter(function (record) {
+      return locationAllowed_(activeSession, record.locationId);
+    })
+    .sort(function (a, b) {
+      return String(b.timestamp).localeCompare(String(a.timestamp));
+    })
+    .slice(0, limit);
+}
+
 function findItemByCode_(query) {
   const normalised = normalise_(query);
   return getItems_().find(function (item) {
@@ -1234,19 +1325,11 @@ function updateLastLogin_(payload) {
 function getDashboard_(session) {
   const activeSession = requireSession_(session);
   const rows = rowsForSession_(activeSession);
-  const recentActivity = getTransactions_(activeSession)
-    .sort(function (a, b) {
-      return String(b.timestamp).localeCompare(String(a.timestamp));
-    })
-    .slice(0, 10);
+  const recentActivity = getRecentTransactions_(activeSession, 10);
   const quickActionsByRole = {
     admin: [
       { href: "/receive", label: "Receive" },
-      { href: "/inbound", label: "Inbound" },
-      { href: "/search-by-shelf", label: "Search by Shelf" },
-      { href: "/search-by-upc", label: "Search by SKU / UPC" },
-      { href: "/quality-check", label: "Quality Check" },
-      { href: "/cycle-count", label: "Cycle Count" },
+      { href: "/search", label: "Search" },
       { href: "/damage-item", label: "Damage Item" },
       { href: "/repair-item", label: "Repair Item" },
       { href: "/packing", label: "Pack Order" },
@@ -1256,11 +1339,7 @@ function getDashboard_(session) {
     ],
     supervisor: [
       { href: "/receive", label: "Receive" },
-      { href: "/inbound", label: "Inbound" },
-      { href: "/search-by-shelf", label: "Search by Shelf" },
-      { href: "/search-by-upc", label: "Search by SKU / UPC" },
-      { href: "/quality-check", label: "Quality Check" },
-      { href: "/cycle-count", label: "Cycle Count" },
+      { href: "/search", label: "Search" },
       { href: "/damage-item", label: "Damage Item" },
       { href: "/repair-item", label: "Repair Item" },
       { href: "/packing", label: "Pack Order" },
@@ -1270,11 +1349,7 @@ function getDashboard_(session) {
     ],
     operator: [
       { href: "/receive", label: "Receive" },
-      { href: "/inbound", label: "Inbound" },
-      { href: "/search-by-shelf", label: "Search by Shelf" },
-      { href: "/search-by-upc", label: "Search by SKU / UPC" },
-      { href: "/quality-check", label: "Quality Check" },
-      { href: "/cycle-count", label: "Cycle Count" },
+      { href: "/search", label: "Search" },
       { href: "/damage-item", label: "Damage Item" },
       { href: "/repair-item", label: "Repair Item" },
       { href: "/packing", label: "Pack Order" }
@@ -1308,6 +1383,26 @@ function getDashboard_(session) {
     quickActions: quickActionsByRole[activeSession.role] || quickActionsByRole.operator,
     recentActivity: recentActivity,
     lastAction: recentActivity.length ? recentActivity[0] : null
+  };
+}
+
+function getWorkflowLookups_(session, payload) {
+  const activeSession = requireSession_(session);
+  const includeShelves = parseBoolean_(payload.includeShelves);
+  const includeReasonCodes = parseBoolean_(payload.includeReasonCodes);
+  const includeQualityTemplates = parseBoolean_(payload.includeQualityTemplates);
+
+  return {
+    locations: scopeRecords_(getLocations_(), activeSession, "locationId"),
+    shelves: includeShelves
+      ? scopeRecords_(getShelves_(), activeSession, "locationId")
+      : undefined,
+    reasonCodes: includeReasonCodes ? getReasonCodes_() : undefined,
+    qualityTemplates: includeQualityTemplates
+      ? getQualityTemplates_().filter(function (template) {
+          return template.active;
+        })
+      : undefined
   };
 }
 
@@ -1401,7 +1496,6 @@ function getReports_(session) {
     damagedItems: scopeRecords_(getDamageLog_(), activeSession, "locationId"),
     repairItems: scopeRecords_(getRepairLog_(), activeSession, "locationId"),
     qualityResults: scopeRecords_(getQualityChecks_(), activeSession, "locationId"),
-    cycleCounts: scopeRecords_(getCycleCounts_(), activeSession, "locationId"),
     userActivity: getTransactions_(activeSession),
     dailyTransactions: getTransactions_(activeSession).filter(function (transaction) {
       return (
@@ -1525,17 +1619,53 @@ function receiveStock_(payload) {
     const previousValue = cloneObject_(inventory);
     const quantityReceived = parsePositiveNumber_(line.quantityReceived, "Quantity received");
     inventory.quantityOnHand += quantityReceived;
-    inventory.quantityPendingInbound += quantityReceived;
+    inventory.quantityPendingInbound = 0;
     inventory.shelfId = shelf.shelfId;
     inventory.shelfCode = shelf.code;
     inventory.batchLot = line.batchLot || inventory.batchLot;
     inventory.expiryDate = line.expiryDate || inventory.expiryDate;
-    inventory.status =
-      normalise_(line.conditionOnArrival) === "good" && !item.requiresQualityCheck
-        ? "pending putaway"
-        : "pending quality check";
+    if (normalise_(line.qualityResult) === "pass") {
+      inventory.quantityAvailable += quantityReceived;
+      inventory.status = "quality passed";
+    } else if (
+      normalise_(line.qualityResult) === "fail" &&
+      normalise_(line.disposition) === "damaged"
+    ) {
+      inventory.quantityDamaged += quantityReceived;
+      inventory.status = "damaged";
+    } else if (
+      normalise_(line.qualityResult) === "fail" &&
+      normalise_(line.disposition) === "repair"
+    ) {
+      inventory.quantityUnderRepair += quantityReceived;
+      inventory.status = "under repair";
+    } else {
+      inventory.quantityQuarantined += quantityReceived;
+      inventory.status =
+        normalise_(line.qualityResult) === "hold" ? "quarantined" : "quality failed";
+    }
     inventory.lastUpdatedAt = new Date().toISOString();
     saveInventory_(inventory);
+
+    appendRecord_(CONFIG.SHEETS.QUALITY_CHECKS, {
+      qualityCheckId: createId_("qc"),
+      itemId: item.itemId,
+      inventoryId: inventory.inventoryId,
+      locationId: locationId,
+      shelfCode: shelf.code,
+      checklistTemplateId: "receive-quick-check",
+      result: normalise_(line.qualityResult),
+      defectCategory: line.defectCategory ? String(line.defectCategory) : "",
+      disposition:
+        normalise_(line.qualityResult) === "fail"
+          ? String(line.disposition || "quarantine")
+          : "",
+      notes: line.notes ? String(line.notes) : "",
+      checkedBy: session.userId,
+      checkedByName: session.fullName,
+      checkedAt: new Date().toISOString(),
+      photoFileId: ""
+    });
 
     appendRecord_(CONFIG.SHEETS.RECEIPT_ITEMS, {
       receiptItemId: createId_("receipt_item"),
@@ -1545,7 +1675,12 @@ function receiveStock_(payload) {
       productName: item.itemName,
       quantityReceived: quantityReceived,
       shelfCode: shelf.code,
-      conditionOnArrival: String(line.conditionOnArrival || ""),
+      qualityResult: String(line.qualityResult || ""),
+      disposition:
+        normalise_(line.qualityResult) === "fail"
+          ? String(line.disposition || "quarantine")
+          : "",
+      defectCategory: line.defectCategory ? String(line.defectCategory) : "",
       batchLot: line.batchLot ? String(line.batchLot) : "",
       expiryDate: line.expiryDate ? String(line.expiryDate) : "",
       notes: line.notes ? String(line.notes) : ""
@@ -1580,267 +1715,6 @@ function receiveStock_(payload) {
   });
 
   return receipt;
-}
-
-function inboundStock_(payload) {
-  const data = unwrapPayload_(payload);
-  const session = requireSession_(payload.session || data.session);
-  const locationId = resolveLocationId_(session, data.locationId);
-  const item = findItemByCode_(parseText_(data.code, "Item"));
-  if (!item) {
-    throw new Error("Item not found for the scanned code.");
-  }
-
-  const quantity = parsePositiveNumber_(data.quantity, "Quantity");
-  const shelfCode = parseText_(data.shelfCode || data.actualShelfCode, "Shelf");
-  const shelf = findShelfByCode_(shelfCode, locationId);
-  if (!shelf) {
-    throw new Error("Shelf is not recognised for this location.");
-  }
-
-  const inventory = ensureInventoryRecord_(item, locationId, shelf.code);
-  if (inventory.quantityPendingInbound < quantity) {
-    throw new Error("Pending putaway quantity is too low.");
-  }
-
-  const previousValue = cloneObject_(inventory);
-  inventory.quantityPendingInbound -= quantity;
-  inventory.quantityAvailable += quantity;
-  inventory.shelfId = shelf.shelfId;
-  inventory.shelfCode = shelf.code;
-  inventory.status = "stored";
-  inventory.lastUpdatedAt = new Date().toISOString();
-  saveInventory_(inventory);
-
-  const transaction = appendTransaction_({
-    item: item,
-    session: session,
-    quantity: quantity,
-    transactionType: "inbound",
-    locationId: locationId,
-    shelfCode: shelf.code,
-    notes: data.notes || "",
-    previousValue: previousValue,
-    newValue: inventory,
-    status: "stored"
-  });
-
-  appendAudit_({
-    actionType: "inbound",
-    session: session,
-    locationId: locationId,
-    quantity: quantity,
-    item: item,
-    shelfCode: shelf.code,
-    notes: data.notes || "",
-    previousValue: previousValue,
-    newValue: inventory
-  });
-
-  return {
-    message: "Inbound move saved.",
-    item: item,
-    inventory: inventory,
-    transaction: transaction
-  };
-}
-
-function qualityCheck_(payload) {
-  const data = unwrapPayload_(payload);
-  const session = requireSession_(payload.session || data.session);
-  const locationId = resolveLocationId_(session, data.locationId);
-  const item = findItemByCode_(parseText_(data.code, "Item"));
-  if (!item) {
-    throw new Error("Item not found for the scanned code.");
-  }
-
-  const shelfCode = data.shelfCode ? String(data.shelfCode) : "";
-  const inventory = ensureInventoryRecord_(item, locationId, shelfCode);
-  const previousValue = cloneObject_(inventory);
-  const quantityAffected = Math.max(parseNumber_(data.quantity, 1), 1);
-  const result = normalise_(parseText_(data.result, "Quality result"));
-  const disposition = normalise_(data.disposition || "");
-
-  if (result === "pass") {
-    inventory.status = "quality passed";
-  } else if (disposition === "repair") {
-    requireAvailable_(
-      inventory,
-      quantityAffected,
-      "Available quantity is too low for repair disposition."
-    );
-    inventory.quantityAvailable -= quantityAffected;
-    inventory.quantityUnderRepair += quantityAffected;
-    inventory.status = "under repair";
-  } else if (disposition === "damaged") {
-    requireAvailable_(
-      inventory,
-      quantityAffected,
-      "Available quantity is too low for damaged disposition."
-    );
-    inventory.quantityAvailable -= quantityAffected;
-    inventory.quantityDamaged += quantityAffected;
-    inventory.status = "damaged";
-  } else {
-    requireAvailable_(
-      inventory,
-      quantityAffected,
-      "Available quantity is too low for quarantine."
-    );
-    inventory.quantityAvailable -= quantityAffected;
-    inventory.quantityQuarantined += quantityAffected;
-    inventory.status = result === "hold" ? "quarantined" : "quality failed";
-  }
-  inventory.lastUpdatedAt = new Date().toISOString();
-  saveInventory_(inventory);
-
-  const qualityCheck = {
-    qualityCheckId: createId_("qc"),
-    itemId: item.itemId,
-    inventoryId: inventory.inventoryId,
-    locationId: locationId,
-    shelfCode: inventory.shelfCode || "",
-    checklistTemplateId: parseText_(data.checklistTemplateId, "Checklist template"),
-    result: result,
-    defectCategory: data.defectCategory ? String(data.defectCategory) : "",
-    disposition: data.disposition ? String(data.disposition) : "",
-    notes: data.notes ? String(data.notes) : "",
-    checkedBy: session.userId,
-    checkedByName: session.fullName,
-    checkedAt: new Date().toISOString(),
-    photoFileId: data.photoFileId ? String(data.photoFileId) : ""
-  };
-  appendRecord_(CONFIG.SHEETS.QUALITY_CHECKS, qualityCheck);
-
-  const transaction = appendTransaction_({
-    item: item,
-    session: session,
-    quantity: quantityAffected,
-    transactionType: result === "pass" ? "quality pass" : "quality fail",
-    locationId: locationId,
-    shelfCode: inventory.shelfCode || "",
-    notes: data.notes || "",
-    previousValue: previousValue,
-    newValue: inventory,
-    status: inventory.status
-  });
-
-  appendAudit_({
-    actionType: result === "pass" ? "quality pass" : "quality fail",
-    session: session,
-    locationId: locationId,
-    quantity: quantityAffected,
-    item: item,
-    shelfCode: inventory.shelfCode || "",
-    notes: data.notes || "",
-    previousValue: previousValue,
-    newValue: qualityCheck
-  });
-
-  return {
-    message: "Quality check saved.",
-    item: item,
-    inventory: inventory,
-    qualityCheck: qualityCheck,
-    transaction: transaction
-  };
-}
-
-function cycleCount_(payload) {
-  const data = unwrapPayload_(payload);
-  const session = requireSession_(payload.session || data.session);
-  const locationId = resolveLocationId_(session, data.locationId);
-  const countedQuantity = parseNonNegativeNumber_(data.countedQuantity, "Counted quantity");
-  const reasonCode = parseText_(data.reasonCode, "Reason");
-  const item = data.code ? findItemByCode_(data.code) : null;
-
-  let inventory = null;
-  if (item) {
-    inventory = ensureInventoryRecord_(item, locationId, data.shelfCode || "");
-  } else {
-    const shelfCode = parseText_(data.shelfCode || data.code, "Shelf");
-    inventory = getInventory_().find(function (record) {
-      return (
-        record.locationId === locationId &&
-        normalise_(record.shelfCode) === normalise_(shelfCode)
-      );
-    });
-  }
-
-  if (!inventory) {
-    throw new Error("No inventory record found for this cycle count.");
-  }
-
-  const matchedItem = item || getItems_().find(function (entry) {
-    return entry.itemId === inventory.itemId;
-  });
-  const previousValue = cloneObject_(inventory);
-  const variance = countedQuantity - inventory.quantityAvailable;
-  const approvalRequired =
-    Math.abs(variance) >= getVarianceThreshold_() &&
-    ["admin", "supervisor"].indexOf(session.role) === -1;
-
-  if (!approvalRequired) {
-    inventory.quantityOnHand += variance;
-    inventory.quantityAvailable = countedQuantity;
-    inventory.lastUpdatedAt = new Date().toISOString();
-    saveInventory_(inventory);
-  }
-
-  const cycleCount = {
-    cycleCountId: createId_("count"),
-    itemId: matchedItem ? matchedItem.itemId : "",
-    shelfCode: inventory.shelfCode || "",
-    locationId: locationId,
-    expectedQuantity: previousValue.quantityAvailable,
-    countedQuantity: countedQuantity,
-    variance: variance,
-    reasonCode: reasonCode,
-    status: approvalRequired ? "submitted" : "approved",
-    approvalRequired: approvalRequired,
-    approvedBy: approvalRequired ? "" : session.userId,
-    countedBy: session.userId,
-    countedByName: session.fullName,
-    countedAt: new Date().toISOString()
-  };
-  appendRecord_(CONFIG.SHEETS.CYCLE_COUNTS, cycleCount);
-
-  const transaction = appendTransaction_({
-    item: matchedItem,
-    session: session,
-    quantity: Math.abs(variance),
-    transactionType: "cycle count adjustment",
-    locationId: locationId,
-    shelfCode: inventory.shelfCode || "",
-    notes: data.notes || "",
-    reasonCode: reasonCode,
-    previousValue: previousValue,
-    newValue: approvalRequired ? cycleCount : inventory,
-    status: cycleCount.status
-  });
-
-  appendAudit_({
-    actionType: "cycle count",
-    session: session,
-    locationId: locationId,
-    quantity: Math.abs(variance),
-    item: matchedItem,
-    shelfCode: inventory.shelfCode || "",
-    referenceNumber: reasonCode,
-    notes: data.notes || "",
-    previousValue: previousValue,
-    newValue: cycleCount
-  });
-
-  return {
-    message: approvalRequired
-      ? "Cycle count submitted for supervisor approval."
-      : "Cycle count saved.",
-    item: matchedItem,
-    inventory: inventory,
-    cycleCount: cycleCount,
-    transaction: transaction
-  };
 }
 
 function damageItem_(payload) {
@@ -2485,6 +2359,7 @@ function getPackingSlipPdf_(payload) {
     const doc = DocumentApp.create(existingOrder.orderNumber + " Packing Slip");
     const body = doc.getBody();
     body.appendParagraph("IQMS").setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    body.appendParagraph("by CIRCAI LTD");
     body.appendParagraph("for RZ-Circular");
     body.appendParagraph("");
     body.appendParagraph("Packing Slip").setHeading(DocumentApp.ParagraphHeading.HEADING2);

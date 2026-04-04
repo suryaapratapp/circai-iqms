@@ -9,6 +9,7 @@ import type {
   InventoryRecord,
   PackingOrderItemRecord,
   PackingOrderRecord,
+  QualityCheckRecord,
   SessionUser,
   UploadedFileRecord
 } from "@/lib/data/types";
@@ -145,7 +146,9 @@ export async function createReceipt(
       code: string;
       quantityReceived: number;
       shelfCode: string;
-      conditionOnArrival: string;
+      qualityResult: "pass" | "fail" | "hold";
+      disposition?: "quarantine" | "damaged" | "repair";
+      defectCategory?: string;
       batchLot?: string;
       expiryDate?: string;
       notes?: string;
@@ -222,14 +225,41 @@ export async function createReceipt(
 
     const previousValue = { ...inventory };
     inventory.quantityOnHand += line.quantityReceived;
-    inventory.quantityPendingInbound += line.quantityReceived;
-    inventory.status =
-      line.conditionOnArrival.toLowerCase() === "good" && !item.requiresQualityCheck
-        ? "pending putaway"
-        : "pending quality check";
+    inventory.quantityPendingInbound = 0;
+    if (line.qualityResult === "pass") {
+      inventory.quantityAvailable += line.quantityReceived;
+      inventory.status = "quality passed";
+    } else if (line.qualityResult === "fail" && line.disposition === "damaged") {
+      inventory.quantityDamaged += line.quantityReceived;
+      inventory.status = "damaged";
+    } else if (line.qualityResult === "fail" && line.disposition === "repair") {
+      inventory.quantityUnderRepair += line.quantityReceived;
+      inventory.status = "under repair";
+    } else {
+      inventory.quantityQuarantined += line.quantityReceived;
+      inventory.status = line.qualityResult === "hold" ? "quarantined" : "quality failed";
+    }
     inventory.batchLot = line.batchLot || inventory.batchLot;
     inventory.expiryDate = line.expiryDate || inventory.expiryDate;
     inventory.lastUpdatedAt = new Date().toISOString();
+
+    const qualityCheck: QualityCheckRecord = {
+      qualityCheckId: createId("qc"),
+      itemId: item.itemId,
+      inventoryId: inventory.inventoryId,
+      locationId: payload.locationId,
+      shelfCode: shelf.code,
+      checklistTemplateId: "receive-quick-check",
+      result: line.qualityResult,
+      defectCategory: line.defectCategory,
+      disposition:
+        line.qualityResult === "fail" ? line.disposition || "quarantine" : undefined,
+      notes: line.notes,
+      checkedBy: session.userId,
+      checkedByName: session.fullName,
+      checkedAt: new Date().toISOString()
+    };
+    database.qualityChecks.unshift(qualityCheck);
 
     database.receiptItems.unshift({
       receiptItemId: createId("receipt-item"),
@@ -239,7 +269,9 @@ export async function createReceipt(
       productName: item.itemName,
       quantityReceived: line.quantityReceived,
       shelfCode: shelf.code,
-      conditionOnArrival: line.conditionOnArrival,
+      qualityResult: line.qualityResult,
+      disposition: line.qualityResult === "fail" ? line.disposition : undefined,
+      defectCategory: line.defectCategory,
       batchLot: line.batchLot,
       expiryDate: line.expiryDate,
       notes: line.notes
@@ -437,10 +469,16 @@ export async function generatePackingSlipPdf(orderId: string) {
   const blue = rgb(0.11, 0.29, 0.56);
 
   page.drawText("IQMS", { x: 40, y: 790, size: 22, font: bold, color: blue });
-  page.drawText("for RZ-Circular", {
+  page.drawText("by CIRCAI LTD", {
     x: 40,
     y: 770,
     size: 12,
+    font
+  });
+  page.drawText("for RZ-Circular", {
+    x: 40,
+    y: 754,
+    size: 10,
     font
   });
 

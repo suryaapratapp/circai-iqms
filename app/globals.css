@@ -4,10 +4,10 @@
 
 :root {
   color-scheme: light;
-  --background: #f4f7fb;
+  --background: #f3f7fc;
   --foreground: #10212b;
-  --card: rgba(255, 255, 255, 0.92);
-  --line: rgba(71, 85, 105, 0.18);
+  --card: rgba(255, 255, 255, 0.94);
+  --line: rgba(148, 163, 184, 0.2);
   --accent: #1d4ed8;
   --accent-soft: rgba(29, 78, 216, 0.12);
   --warn: #b45309;
@@ -21,8 +21,8 @@
 html {
   min-height: 100%;
   background:
-    radial-gradient(circle at top left, rgba(29, 78, 216, 0.12), transparent 30%),
-    linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+    radial-gradient(circle at top left, rgba(29, 78, 216, 0.08), transparent 28%),
+    linear-gradient(180deg, #f9fbfe 0%, #edf3fb 100%);
 }
 
 body {
@@ -31,8 +31,8 @@ body {
   color: var(--foreground);
   font-family: "Avenir Next", "Segoe UI", sans-serif;
   background-image:
-    radial-gradient(circle at top right, rgba(30, 58, 138, 0.08), transparent 28%),
-    linear-gradient(180deg, rgba(248, 251, 255, 0.9), rgba(238, 244, 251, 0.98));
+    radial-gradient(circle at top right, rgba(30, 58, 138, 0.06), transparent 24%),
+    linear-gradient(180deg, rgba(249, 251, 254, 0.96), rgba(237, 243, 251, 0.98));
 }
 
 a {
@@ -49,16 +49,19 @@ textarea {
 
 .floor-grid {
   background-image:
-    linear-gradient(rgba(29, 78, 216, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(29, 78, 216, 0.05) 1px, transparent 1px);
-  background-size: 24px 24px;
+    linear-gradient(rgba(29, 78, 216, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(29, 78, 216, 0.025) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
 .glass-panel {
-  background: var(--card);
-  backdrop-filter: blur(18px);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(255, 255, 255, 0.92));
+  backdrop-filter: blur(14px);
   border: 1px solid var(--line);
-  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
+  box-shadow:
+    0 20px 48px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
 .no-scrollbar::-webkit-scrollbar {

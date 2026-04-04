@@ -110,13 +110,10 @@ function makeRoles(): RoleRecord[] {
         "reports",
         "approvals",
         "receive",
-        "inbound",
         "search",
-        "quality",
         "damage",
         "repair",
-        "packing",
-        "cycle-count"
+        "packing"
       ]
     },
     {
@@ -125,13 +122,10 @@ function makeRoles(): RoleRecord[] {
       description: "Operational oversight, approvals, and stock control.",
       permissions: [
         "receive",
-        "inbound",
         "search",
-        "quality",
         "damage",
         "repair",
         "packing",
-        "cycle-count",
         "approvals",
         "inventory",
         "transactions",
@@ -146,13 +140,10 @@ function makeRoles(): RoleRecord[] {
       description: "Day-to-day warehouse execution on mobile devices.",
       permissions: [
         "receive",
-        "inbound",
         "search",
-        "quality",
         "packing",
         "damage",
-        "repair",
-        "cycle-count"
+        "repair"
       ]
     }
   ];
@@ -160,7 +151,6 @@ function makeRoles(): RoleRecord[] {
 
 function makeReasonCodes(): ReasonCodeRecord[] {
   return [
-    { reasonCodeId: "reason_1", code: "COUNT-DIFF", category: "cycle-count", label: "Count discrepancy", approvalRequired: true },
     { reasonCodeId: "reason_2", code: "PKG-DMG", category: "damage", label: "Torn packaging", approvalRequired: false },
     { reasonCodeId: "reason_3", code: "CONTAM", category: "damage", label: "Contamination", approvalRequired: true },
     { reasonCodeId: "reason_4", code: "STITCH", category: "damage", label: "Stitching issue", approvalRequired: false },
@@ -227,8 +217,8 @@ function makeSettings(): SettingsRecord[] {
     {
       settingId: "setting_2",
       key: "brandingLine",
-      value: "IQMS for RZ-Circular",
-      description: "Branding shown across login, header, and packing slips."
+      value: "IQMS by CIRCAI LTD",
+      description: "Branding shown across the login, header, dashboard, and packing slips."
     },
     {
       settingId: "setting_3",
@@ -353,7 +343,8 @@ function makeReceipts(now: Date): { receipts: ReceiptRecord[]; receiptItems: Rec
         productName: "Standard Surgical Gown",
         quantityReceived: 36,
         shelfCode: "A3",
-        conditionOnArrival: "Good"
+        qualityResult: "pass",
+        defectCategory: ""
       },
       {
         receiptItemId: "receipt_item_2",
@@ -363,7 +354,8 @@ function makeReceipts(now: Date): { receipts: ReceiptRecord[]; receiptItems: Rec
         productName: "Reusable Theatre Mask",
         quantityReceived: 24,
         shelfCode: "A1",
-        conditionOnArrival: "Good"
+        qualityResult: "pass",
+        defectCategory: ""
       }
     ]
   };

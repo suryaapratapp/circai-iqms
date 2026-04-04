@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getServerSession } from "@/lib/auth/session";
+import { clearRepositoryCache } from "@/lib/data";
 import { createReceipt } from "@/lib/data/operations";
 
 const lineSchema = z.object({
   code: z.string().min(1),
   quantityReceived: z.number().positive(),
   shelfCode: z.string().min(1),
-  conditionOnArrival: z.string().min(1),
+  qualityResult: z.enum(["pass", "fail", "hold"]),
+  disposition: z.enum(["quarantine", "damaged", "repair"]).optional(),
+  defectCategory: z.string().optional(),
   batchLot: z.string().optional(),
   expiryDate: z.string().optional(),
   notes: z.string().optional()
@@ -30,6 +33,7 @@ export async function POST(request: Request) {
     }
     const body = schema.parse(await request.json());
     const receipt = await createReceipt(body, session);
+    clearRepositoryCache();
     return NextResponse.json(receipt);
   } catch (error) {
     const message =

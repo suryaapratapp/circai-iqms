@@ -2,10 +2,10 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "IQMS",
+    name: "IQMS by CIRCAI LTD",
     short_name: "IQMS",
     description:
-      "Inventory and Quality Management System for RZ-Circular.",
+      "Inventory and Quality Management System by CIRCAI LTD for RZ-Circular.",
     start_url: "/dashboard",
     display: "standalone",
     background_color: "#f4f7fb",

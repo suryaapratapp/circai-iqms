@@ -4,9 +4,9 @@ import { Toaster } from "sonner";
 import { appConfig } from "@/lib/config/app";
 
 export const metadata: Metadata = {
-  title: `${appConfig.name} | ${appConfig.fullName}`,
+  title: `${appConfig.name} ${appConfig.brandLine}`,
   description:
-    `${appConfig.fullName} for RZ-Circular. Mobile-first stock and quality workflows for warehouse teams.`
+    `${appConfig.fullName} by CIRCAI LTD for RZ-Circular. Stock and quality management workflows for warehouse teams.`
 };
 
 export default function RootLayout({

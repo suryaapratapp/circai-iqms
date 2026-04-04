@@ -1,11 +1,12 @@
 import { ProfilePanel } from "@/components/profile/profile-panel";
-import { getRepository } from "@/lib/data";
-import { requireSession } from "@/lib/auth/session";
+import { getCachedAccessibleLocations, getCachedSession } from "@/lib/data/server";
 
 export default async function ProfilePage() {
-  const session = await requireSession();
-  const lookups = await getRepository().getLookups(session);
-  const location = lookups.locations.find(
+  const [session, locations] = await Promise.all([
+    getCachedSession(),
+    getCachedAccessibleLocations()
+  ]);
+  const location = locations.find(
     (entry) => entry.locationId === session.assignedLocationId
   );
 

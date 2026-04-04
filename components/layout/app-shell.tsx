@@ -14,11 +14,11 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="floor-grid min-h-screen px-4 py-4 md:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1600px] gap-6">
+    <div className="floor-grid min-h-screen px-3 py-3 md:px-5 md:py-5 lg:px-7">
+      <div className="mx-auto flex max-w-[1520px] gap-5 lg:gap-6">
         <Sidebar role={session.role} />
         <main className="min-w-0 flex-1 pb-28 lg:pb-8">
-          <div className="space-y-6">
+          <div className="space-y-5">
             <Header location={location} session={session} />
             {children}
           </div>

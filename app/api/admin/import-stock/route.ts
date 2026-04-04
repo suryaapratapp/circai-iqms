@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "@/lib/auth/session";
+import { clearRepositoryCache } from "@/lib/data";
 import { importStockWorkbook } from "@/lib/data/operations";
 
 export async function POST(request: Request) {
@@ -20,5 +21,6 @@ export async function POST(request: Request) {
     Buffer.from(await file.arrayBuffer()),
     session
   );
+  clearRepositoryCache();
   return NextResponse.json(summary);
 }

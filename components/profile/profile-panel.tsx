@@ -57,9 +57,9 @@ export function ProfilePanel({
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           {[
             "Mobile-first actions prioritise scan and confirm over typing.",
-            "Use Search by SKU / UPC when a barcode does not map cleanly from a workflow.",
-            "Cycle count variance beyond threshold routes to supervisor approval.",
-            "Failed quality or damaged items remain blocked from packing."
+            "Use Search to find stock by shelf, SKU, UPC, barcode, or QR.",
+            "Received stock is quality-checked quickly and placed straight onto a shelf.",
+            "Failed, held, damaged, or repair stock remains blocked from packing."
           ].map((note) => (
             <div className="rounded-2xl bg-slate-100 p-4 text-sm text-slate-700" key={note}>
               {note}

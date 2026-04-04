@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { InventoryListItem } from "@/lib/data/repository";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { inputClassName } from "@/components/ui/field";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { formatDateTime, formatQuantity } from "@/lib/utils/format";
@@ -17,8 +18,10 @@ export function InventoryBoard({
   selectedItemId?: string;
 }) {
   const [query, setQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(24);
+  const deferredQuery = useDeferredValue(query);
   const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
+    const normalized = deferredQuery.trim().toLowerCase();
     if (!normalized) {
       return rows;
     }
@@ -33,10 +36,15 @@ export function InventoryBoard({
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalized))
     );
-  }, [query, rows]);
+  }, [deferredQuery, rows]);
+
+  useEffect(() => {
+    setVisibleCount(24);
+  }, [deferredQuery, rows]);
 
   const selected =
     filtered.find((row) => row.item.itemId === selectedItemId) || filtered[0];
+  const visibleRows = filtered.slice(0, visibleCount);
 
   if (!rows.length) {
     return (
@@ -48,8 +56,8 @@ export function InventoryBoard({
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-      <SurfaceCard className="rounded-[32px] p-6">
+    <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+      <SurfaceCard className="rounded-[34px] p-6 md:p-7">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="font-heading text-2xl font-bold text-ink">Inventory list</p>
@@ -58,20 +66,24 @@ export function InventoryBoard({
             </p>
           </div>
           <input
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-teal md:max-w-xs"
+            className={inputClassName("md:max-w-xs")}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search inventory..."
             value={query}
           />
         </div>
         <div className="mt-5 space-y-3">
-          {filtered.map((row) => (
-            <Link href={`/inventory/${row.item.itemId}`} key={row.inventory.inventoryId}>
+          {visibleRows.map((row) => (
+            <Link
+              href={`/inventory/${row.item.itemId}`}
+              key={row.inventory.inventoryId}
+              prefetch={false}
+            >
               <div
                 className={`rounded-[26px] border p-4 transition ${
                   selected?.item.itemId === row.item.itemId
-                    ? "border-teal bg-teal/5"
-                    : "border-slate-200 bg-white hover:border-teal/40"
+                    ? "border-blue-200 bg-blue-50/70"
+                    : "border-slate-200 bg-white/95 hover:border-blue-200 hover:bg-blue-50/50"
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -91,11 +103,20 @@ export function InventoryBoard({
               </div>
             </Link>
           ))}
+          {filtered.length > visibleRows.length ? (
+            <Button
+              className="w-full"
+              onClick={() => setVisibleCount((current) => current + 24)}
+              variant="secondary"
+            >
+              Show more inventory
+            </Button>
+          ) : null}
         </div>
       </SurfaceCard>
 
       {selected ? (
-        <SurfaceCard className="rounded-[32px] p-6">
+        <SurfaceCard className="rounded-[34px] p-6 md:p-7">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="font-heading text-3xl font-bold text-ink">
@@ -114,7 +135,6 @@ export function InventoryBoard({
             <Detail label="Shelf" value={selected.inventory.shelfCode || "Pending"} />
             <Detail label="On hand" value={formatQuantity(selected.inventory.quantityOnHand)} />
             <Detail label="Available" value={formatQuantity(selected.inventory.quantityAvailable)} />
-            <Detail label="Pending inbound" value={formatQuantity(selected.inventory.quantityPendingInbound)} />
             <Detail label="Damaged" value={formatQuantity(selected.inventory.quantityDamaged)} />
             <Detail label="Under repair" value={formatQuantity(selected.inventory.quantityUnderRepair)} />
             <Detail label="Packed" value={formatQuantity(selected.inventory.quantityPacked)} />
@@ -122,14 +142,14 @@ export function InventoryBoard({
             <Detail label="Expiry" value={selected.inventory.expiryDate || "-"} />
           </div>
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link href="/quality-check">
-              <Button variant="ghost">Quality Check</Button>
-            </Link>
-            <Link href="/cycle-count">
-              <Button variant="ghost">Cycle Count</Button>
-            </Link>
-            <Link href="/repair-item">
+            <Link href="/repair-item" prefetch={false}>
               <Button variant="ghost">Repair</Button>
+            </Link>
+            <Link href="/damage-item" prefetch={false}>
+              <Button variant="ghost">Damage</Button>
+            </Link>
+            <Link href="/packing" prefetch={false}>
+              <Button variant="ghost">Pack</Button>
             </Link>
           </div>
           <p className="mt-6 text-xs text-slate-500">
@@ -143,7 +163,7 @@ export function InventoryBoard({
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-slate-100 px-3 py-3">
+    <div className="rounded-[18px] bg-slate-100 px-3 py-3">
       <p className="text-xs text-slate-500">{label}</p>
       <p className="mt-1 font-semibold text-ink">{value}</p>
     </div>
@@ -152,7 +172,7 @@ function Tile({ label, value }: { label: string; value: string }) {
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-slate-100 px-4 py-4">
+    <div className="rounded-[18px] bg-slate-100 px-4 py-4">
       <p className="text-sm text-slate-500">{label}</p>
       <p className="mt-1 font-semibold text-ink">{value}</p>
     </div>

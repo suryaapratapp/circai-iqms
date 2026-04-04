@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getServerSession } from "@/lib/auth/session";
+import { clearRepositoryCache } from "@/lib/data";
 import { createPackingOrder } from "@/lib/data/operations";
 
 const schema = z.object({
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
     }
     const body = schema.parse(await request.json());
     const result = await createPackingOrder(body, session);
+    clearRepositoryCache();
     return NextResponse.json(result);
   } catch (error) {
     const message =

@@ -222,17 +222,14 @@ export function ScannerModal({ open, onClose, onDetected }: ScannerProps) {
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 md:flex md:items-center md:justify-center md:p-5">
       <SurfaceCard className="flex h-[100dvh] w-full flex-col overflow-hidden rounded-none border-0 bg-slate-950 p-0 text-white shadow-none md:h-auto md:max-h-[calc(100dvh-2.5rem)] md:max-w-2xl md:rounded-[32px] md:border md:border-slate-200 md:bg-white md:text-ink md:shadow-2xl">
-        <div className="flex items-start justify-between gap-4 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] md:px-6 md:pt-6">
+        <div className="flex items-start justify-between gap-4 px-4 pb-2 pt-[max(0.875rem,env(safe-area-inset-top))] md:px-6 md:pb-3 md:pt-6">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-200 md:text-blue-700">
               Scanner
             </p>
-            <h2 className="mt-2 font-heading text-2xl font-bold text-white md:text-ink">
+            <h2 className="mt-1.5 font-heading text-2xl font-bold text-slate-200 md:text-ink">
               Scan barcode or QR code
             </h2>
-            <p className="mt-2 text-sm text-slate-300 md:text-slate-600">
-              Centre the code inside the frame. Manual entry stays available below.
-            </p>
           </div>
           <button
             aria-label="Close scanner"
@@ -245,7 +242,7 @@ export function ScannerModal({ open, onClose, onDetected }: ScannerProps) {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-6 md:pb-6">
-          <div className="relative flex min-h-[52dvh] flex-1 items-stretch overflow-hidden rounded-[28px] bg-slate-950 ring-1 ring-white/10 md:min-h-[28rem] md:ring-slate-200">
+          <div className="relative flex h-[min(44dvh,24rem)] min-h-[17rem] flex-[0_0_auto] items-stretch overflow-hidden rounded-[28px] bg-slate-950 ring-1 ring-white/10 md:h-auto md:min-h-[28rem] md:flex-1 md:ring-slate-200">
             <video
               autoPlay
               className="h-full w-full object-contain"
@@ -270,11 +267,7 @@ export function ScannerModal({ open, onClose, onDetected }: ScannerProps) {
                 )}
                 <p className="max-w-sm text-sm leading-6 text-slate-100">{status}</p>
               </div>
-            ) : (
-              <div className="pointer-events-none absolute left-1/2 top-4 z-10 w-[min(88%,24rem)] -translate-x-1/2 rounded-full border border-white/20 bg-slate-950/38 px-3 py-2 text-center text-xs font-medium text-white backdrop-blur">
-                Keep the shelf label or item code inside the frame.
-              </div>
-            )}
+            ) : null}
 
             <div className="pointer-events-none absolute inset-0">
               <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0,transparent_32%,rgba(15,23,42,0.34)_72%)]" />
@@ -288,16 +281,14 @@ export function ScannerModal({ open, onClose, onDetected }: ScannerProps) {
             </div>
           </div>
 
-          <div className="mt-3 rounded-[22px] border border-blue-100 bg-blue-50/90 px-4 py-3 text-sm text-slate-700">
-            <div className="flex items-start gap-3">
-              {scannerState === "starting" ? (
-                <Loader2 className="mt-0.5 h-4 w-4 animate-spin text-blue-700" />
-              ) : (
-                <ScanLine className="mt-0.5 h-4 w-4 text-blue-700" />
-              )}
-              <p>{status}</p>
+          {scannerState === "error" ? (
+            <div className="mt-3 rounded-[20px] border border-blue-100 bg-blue-50/90 px-4 py-3 text-sm text-slate-700">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-4 w-4 text-blue-700" />
+                <p>{status}</p>
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <div className="mt-3">
             <label className="flex flex-col gap-2">
@@ -313,28 +304,30 @@ export function ScannerModal({ open, onClose, onDetected }: ScannerProps) {
             </label>
           </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <div className="mt-4 space-y-3">
             <Button className="w-full" onClick={submitManualValue}>
               Use manual entry
             </Button>
-            <Button
-              className="w-full"
-              onClick={() => {
-                stopScanner();
-                setScannerState("starting");
-                setStatus("Restarting camera...");
-                const nextSession = sessionRef.current + 1;
-                sessionRef.current = nextSession;
-                detectedRef.current = false;
-                void startScanner(nextSession);
-              }}
-              variant="secondary"
-            >
-              Restart camera
-            </Button>
-            <Button className="w-full" onClick={onClose} variant="ghost">
-              Cancel
-            </Button>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                className="w-full"
+                onClick={() => {
+                  stopScanner();
+                  setScannerState("starting");
+                  setStatus("Restarting camera...");
+                  const nextSession = sessionRef.current + 1;
+                  sessionRef.current = nextSession;
+                  detectedRef.current = false;
+                  void startScanner(nextSession);
+                }}
+                variant="secondary"
+              >
+                Restart camera
+              </Button>
+              <Button className="w-full" onClick={onClose} variant="ghost">
+                Cancel
+              </Button>
+            </div>
           </div>
         </div>
       </SurfaceCard>

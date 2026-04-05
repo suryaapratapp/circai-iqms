@@ -220,23 +220,23 @@ export function ScannerModal({ open, onClose, onDetected }: ScannerProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-slate-950/60 p-3 md:items-center md:justify-center md:p-6">
-      <SurfaceCard className="w-full max-w-xl rounded-[30px] border border-slate-200 bg-white p-5 shadow-2xl md:p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
-              Mobile scanner
+    <div className="fixed inset-0 z-50 bg-slate-950/70 md:flex md:items-center md:justify-center md:p-5">
+      <SurfaceCard className="flex h-[100dvh] w-full flex-col overflow-hidden rounded-none border-0 bg-slate-950 p-0 text-white shadow-none md:h-auto md:max-h-[calc(100dvh-2.5rem)] md:max-w-2xl md:rounded-[32px] md:border md:border-slate-200 md:bg-white md:text-ink md:shadow-2xl">
+        <div className="flex items-start justify-between gap-4 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] md:px-6 md:pt-6">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-200 md:text-blue-700">
+              Scanner
             </p>
-            <h2 className="mt-2 font-heading text-2xl font-bold text-ink">
+            <h2 className="mt-2 font-heading text-2xl font-bold text-white md:text-ink">
               Scan barcode or QR code
             </h2>
-            <p className="mt-2 text-sm text-slate-600">
-              Use the rear camera where available. If scanning does not work, you can enter the code manually below.
+            <p className="mt-2 text-sm text-slate-300 md:text-slate-600">
+              Centre the code inside the frame. Manual entry stays available below.
             </p>
           </div>
           <button
             aria-label="Close scanner"
-            className="rounded-full border border-slate-200 bg-white p-2 text-slate-500 transition hover:text-ink"
+            className="rounded-full border border-white/15 bg-white/10 p-2 text-white transition hover:bg-white/15 md:border-slate-200 md:bg-white md:text-slate-500 md:hover:text-ink"
             onClick={onClose}
             type="button"
           >
@@ -244,11 +244,11 @@ export function ScannerModal({ open, onClose, onDetected }: ScannerProps) {
           </button>
         </div>
 
-        <div className="mt-5 overflow-hidden rounded-[24px] border border-slate-200 bg-slate-950">
-          <div className="relative aspect-[3/4] min-h-[20rem] w-full bg-slate-950 md:aspect-video">
+        <div className="flex min-h-0 flex-1 flex-col px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-6 md:pb-6">
+          <div className="relative flex min-h-[52dvh] flex-1 items-stretch overflow-hidden rounded-[28px] bg-slate-950 ring-1 ring-white/10 md:min-h-[28rem] md:ring-slate-200">
             <video
               autoPlay
-              className="h-full w-full object-cover"
+              className="h-full w-full object-contain"
               disablePictureInPicture
               muted
               playsInline
@@ -262,7 +262,7 @@ export function ScannerModal({ open, onClose, onDetected }: ScannerProps) {
             />
 
             {scannerState !== "ready" ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950/75 px-6 text-center text-white">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950/78 px-6 text-center text-white">
                 {scannerState === "starting" ? (
                   <Loader2 className="h-8 w-8 animate-spin text-blue-200" />
                 ) : (
@@ -271,61 +271,71 @@ export function ScannerModal({ open, onClose, onDetected }: ScannerProps) {
                 <p className="max-w-sm text-sm leading-6 text-slate-100">{status}</p>
               </div>
             ) : (
-              <div className="pointer-events-none absolute inset-x-5 top-5 rounded-2xl border border-white/20 bg-slate-950/35 px-3 py-2 text-center text-xs font-medium text-white backdrop-blur">
-                Align the code inside the frame.
+              <div className="pointer-events-none absolute left-1/2 top-4 z-10 w-[min(88%,24rem)] -translate-x-1/2 rounded-full border border-white/20 bg-slate-950/38 px-3 py-2 text-center text-xs font-medium text-white backdrop-blur">
+                Keep the shelf label or item code inside the frame.
               </div>
             )}
 
-            <div className="pointer-events-none absolute inset-6 rounded-[28px] border-2 border-white/80 shadow-[0_0_0_9999px_rgba(15,23,42,0.18)]" />
-            <div className="pointer-events-none absolute left-1/2 top-1/2 h-0.5 w-[68%] -translate-x-1/2 -translate-y-1/2 bg-blue-300/90 shadow-[0_0_18px_rgba(147,197,253,0.9)]" />
+            <div className="pointer-events-none absolute inset-0">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0,transparent_32%,rgba(15,23,42,0.34)_72%)]" />
+              <div className="absolute left-1/2 top-1/2 h-[clamp(14rem,46dvh,22rem)] w-[min(84vw,22rem)] -translate-x-1/2 -translate-y-1/2 rounded-[32px] border-2 border-white/90 shadow-[0_0_0_9999px_rgba(15,23,42,0.16)]">
+                <div className="absolute -left-0.5 -top-0.5 h-8 w-8 rounded-tl-[30px] border-l-[3px] border-t-[3px] border-blue-300" />
+                <div className="absolute -right-0.5 -top-0.5 h-8 w-8 rounded-tr-[30px] border-r-[3px] border-t-[3px] border-blue-300" />
+                <div className="absolute -bottom-0.5 -left-0.5 h-8 w-8 rounded-bl-[30px] border-b-[3px] border-l-[3px] border-blue-300" />
+                <div className="absolute -bottom-0.5 -right-0.5 h-8 w-8 rounded-br-[30px] border-b-[3px] border-r-[3px] border-blue-300" />
+                <div className="absolute left-1/2 top-1/2 h-0.5 w-[72%] -translate-x-1/2 -translate-y-1/2 bg-blue-300/90 shadow-[0_0_18px_rgba(147,197,253,0.9)]" />
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-slate-700">
-          <div className="flex items-start gap-3">
-            {scannerState === "starting" ? (
-              <Loader2 className="mt-0.5 h-4 w-4 animate-spin text-blue-700" />
-            ) : (
-              <ScanLine className="mt-0.5 h-4 w-4 text-blue-700" />
-            )}
-            <p>{status}</p>
+          <div className="mt-3 rounded-[22px] border border-blue-100 bg-blue-50/90 px-4 py-3 text-sm text-slate-700">
+            <div className="flex items-start gap-3">
+              {scannerState === "starting" ? (
+                <Loader2 className="mt-0.5 h-4 w-4 animate-spin text-blue-700" />
+              ) : (
+                <ScanLine className="mt-0.5 h-4 w-4 text-blue-700" />
+              )}
+              <p>{status}</p>
+            </div>
           </div>
-        </div>
 
-        <div className="mt-5">
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-semibold text-slate-700">Manual entry</span>
-            <input
-              className={inputClassName()}
-              onChange={(event) => setManualValue(event.target.value)}
-              placeholder="Enter barcode, SKU, UPC, or QR value"
-              value={manualValue}
-            />
-          </label>
-        </div>
+          <div className="mt-3">
+            <label className="flex flex-col gap-2">
+              <span className="text-sm font-semibold text-slate-200 md:text-slate-700">
+                Manual entry
+              </span>
+              <input
+                className={inputClassName("bg-white md:bg-slate-50/80")}
+                onChange={(event) => setManualValue(event.target.value)}
+                placeholder="Enter barcode, SKU, UPC, or QR value"
+                value={manualValue}
+              />
+            </label>
+          </div>
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-3">
-          <Button className="w-full" onClick={submitManualValue}>
-            Use manual entry
-          </Button>
-          <Button
-            className="w-full"
-            onClick={() => {
-              stopScanner();
-              setScannerState("starting");
-              setStatus("Restarting camera...");
-              const nextSession = sessionRef.current + 1;
-              sessionRef.current = nextSession;
-              detectedRef.current = false;
-              void startScanner(nextSession);
-            }}
-            variant="secondary"
-          >
-            Restart camera
-          </Button>
-          <Button className="w-full" onClick={onClose} variant="ghost">
-            Cancel
-          </Button>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <Button className="w-full" onClick={submitManualValue}>
+              Use manual entry
+            </Button>
+            <Button
+              className="w-full"
+              onClick={() => {
+                stopScanner();
+                setScannerState("starting");
+                setStatus("Restarting camera...");
+                const nextSession = sessionRef.current + 1;
+                sessionRef.current = nextSession;
+                detectedRef.current = false;
+                void startScanner(nextSession);
+              }}
+              variant="secondary"
+            >
+              Restart camera
+            </Button>
+            <Button className="w-full" onClick={onClose} variant="ghost">
+              Cancel
+            </Button>
+          </div>
         </div>
       </SurfaceCard>
     </div>

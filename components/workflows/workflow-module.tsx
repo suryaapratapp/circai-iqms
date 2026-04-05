@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ScanLine } from "lucide-react";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { workflowDefinitions } from "@/lib/config/workflows";
 import type { WorkflowType } from "@/lib/data/types";
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Field, inputClassName } from "@/components/ui/field";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SurfaceCard } from "@/components/ui/surface-card";
-import { ScannerModal } from "@/components/workflows/scanner-modal";
+import { ItemSelect } from "@/components/workflows/item-select";
 import { ShelfInput } from "@/components/workflows/shelf-input";
 import { formatDateTime, formatQuantity } from "@/lib/utils/format";
 
@@ -47,9 +47,7 @@ export function WorkflowModule({
   );
   const [preview, setPreview] = useState<SearchItemResult | null>(null);
   const [lastResponse, setLastResponse] = useState<WorkflowResponse | null>(null);
-  const [openScanner, setOpenScanner] = useState(false);
   const [pending, setPending] = useState(false);
-  const [scannedValues, setScannedValues] = useState<string[]>([]);
 
   const fieldOptions = useMemo(
     () => ({
@@ -127,18 +125,6 @@ export function WorkflowModule({
       locationId: String(current.locationId || initialLocationId)
     }));
     setPreview(null);
-    setScannedValues([]);
-  }
-
-  function handleDetected(value: string) {
-    if (scannedValues.includes(value)) {
-      toast.warning("Duplicate scan detected in the current transaction.");
-      return;
-    }
-    setScannedValues((current) => [...current, value]);
-    updateValue("code", value);
-    setOpenScanner(false);
-    loadPreview(value);
   }
 
   return (
@@ -156,10 +142,6 @@ export function WorkflowModule({
               {definition.description}
             </p>
           </div>
-          <Button className="gap-2" onClick={() => setOpenScanner(true)} variant="secondary">
-            <ScanLine className="h-4 w-4" />
-            Open scanner
-          </Button>
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -211,15 +193,42 @@ export function WorkflowModule({
                       shelves={availableShelves}
                       value={String(value || "")}
                     />
+                  ) : field.type === "scan" ? (
+                    field.name === "code" ? (
+                      <ItemSelect
+                        items={lookups.items || []}
+                        onBlur={() => {
+                          if (values.code) {
+                            void loadPreview(String(values.code));
+                          }
+                        }}
+                        onChange={(nextValue) => updateValue(field.name, nextValue)}
+                        onDetected={(nextValue) => {
+                          if (nextValue) {
+                            void loadPreview(nextValue);
+                          }
+                        }}
+                        onOptionSelect={(nextValue) => {
+                          if (nextValue) {
+                            void loadPreview(nextValue);
+                          }
+                        }}
+                        placeholder={field.placeholder || "Scan, search, or select item"}
+                        value={String(value || "")}
+                      />
+                    ) : (
+                      <input
+                        className={inputClassName()}
+                        onChange={(event) => updateValue(field.name, event.target.value)}
+                        placeholder={field.placeholder}
+                        type="text"
+                        value={String(value || "")}
+                      />
+                    )
                   ) : (
                     <div className="flex gap-3">
                       <input
                         className={inputClassName()}
-                        onBlur={() => {
-                          if (field.type === "scan" && values.code) {
-                            loadPreview(String(values.code));
-                          }
-                        }}
                         onChange={(event) =>
                           updateValue(
                             field.name,
@@ -230,11 +239,6 @@ export function WorkflowModule({
                         type={field.type === "number" ? "number" : field.type}
                         value={String(value || "")}
                       />
-                      {field.type === "scan" ? (
-                        <Button onClick={() => setOpenScanner(true)} variant="ghost">
-                          Scan
-                        </Button>
-                      ) : null}
                     </div>
                   )}
                 </Field>
@@ -253,7 +257,6 @@ export function WorkflowModule({
             onClick={() => {
               setValues(defaultValues(initialLocationId));
               setPreview(null);
-              setScannedValues([]);
             }}
             variant="ghost"
           >
@@ -339,12 +342,6 @@ export function WorkflowModule({
           </SurfaceCard>
         ) : null}
       </div>
-
-      <ScannerModal
-        onClose={() => setOpenScanner(false)}
-        onDetected={handleDetected}
-        open={openScanner}
-      />
     </div>
   );
 }

@@ -16,12 +16,16 @@ export function TransactionHistory({
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(30);
   const deferredQuery = useDeferredValue(query);
+  const sortedTransactions = useMemo(
+    () => [...transactions].sort((left, right) => right.timestamp.localeCompare(left.timestamp)),
+    [transactions]
+  );
   const filtered = useMemo(() => {
     const normalised = deferredQuery.trim().toLowerCase();
     if (!normalised) {
-      return transactions;
+      return sortedTransactions;
     }
-    return transactions.filter((transaction) =>
+    return sortedTransactions.filter((transaction) =>
       [
         transaction.transactionType,
         transaction.itemName,
@@ -32,12 +36,12 @@ export function TransactionHistory({
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalised))
     );
-  }, [deferredQuery, transactions]);
+  }, [deferredQuery, sortedTransactions]);
   const visibleTransactions = filtered.slice(0, visibleCount);
 
   useEffect(() => {
     setVisibleCount(30);
-  }, [deferredQuery, transactions]);
+  }, [deferredQuery, sortedTransactions]);
 
   return (
     <div className="space-y-6">

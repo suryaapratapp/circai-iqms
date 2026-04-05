@@ -41,6 +41,26 @@ import type {
   WorkflowType
 } from "@/lib/data/types";
 
+function getPackingOrderStatus(totalQuantity: number, unpackedQuantity: number) {
+  if (unpackedQuantity <= 0) {
+    return "packed" as const;
+  }
+  if (unpackedQuantity >= totalQuantity) {
+    return "unpacked" as const;
+  }
+  return "partially unpacked" as const;
+}
+
+function syncPackingOrder(order: PackingOrderRecord, items: DatabaseShape["packingOrderItems"]) {
+  const unpackedQuantity = items.reduce(
+    (sum, item) => sum + Number(item.unpackedQuantity || 0),
+    0
+  );
+  order.unpackedQuantity = unpackedQuantity;
+  order.status = getPackingOrderStatus(order.totalQuantity, unpackedQuantity);
+  order.updatedAt = new Date().toISOString();
+}
+
 function rowsForSession(database: DatabaseShape, session: SessionUser): InventoryListItem[] {
   const locationMap = getLocationMap(database.locations);
   const shelfMap = getShelfMap(database.shelves);
@@ -70,11 +90,12 @@ function requireInventory(
   locationId: string,
   shelfCode?: string
 ) {
+  const normalizedShelfCode = normalizeText(shelfCode || "");
   return database.inventory.find(
     (record) =>
       record.itemId === itemId &&
       record.locationId === locationId &&
-      (!shelfCode || record.shelfCode === shelfCode)
+      normalizeText(record.shelfCode || "") === normalizedShelfCode
   );
 }
 
@@ -84,11 +105,7 @@ function ensureInventory(
   locationId: string,
   shelfCode?: string
 ) {
-  const existing =
-    requireInventory(database, item.itemId, locationId, shelfCode) ||
-    database.inventory.find(
-      (record) => record.itemId === item.itemId && record.locationId === locationId
-    );
+  const existing = requireInventory(database, item.itemId, locationId, shelfCode);
   if (existing) {
     return existing;
   }
@@ -264,6 +281,7 @@ const localRepository: Repository = {
     const rows = rowsForSession(database, session);
     const recentActivity = database.transactions
       .filter((record) => session.locationIds.includes(record.locationId))
+      .sort((left, right) => right.timestamp.localeCompare(left.timestamp))
       .slice(0, 10);
     const quickActionsByRole: Record<
       SessionUser["role"],
@@ -340,6 +358,7 @@ const localRepository: Repository = {
             session.locationIds.includes(shelf.locationId)
           )
         : undefined,
+      items: requirements.includeItems ? database.items : undefined,
       reasonCodes: requirements.includeReasonCodes
         ? database.reasonCodes
         : undefined,
@@ -387,7 +406,9 @@ const localRepository: Repository = {
       (candidate) => candidate.locationId === shelf.locationId
     );
     const inventory = rowsForSession(database, session).filter(
-      (row) => row.inventory.shelfCode === shelf.code
+      (row) =>
+        row.inventory.locationId === shelf.locationId &&
+        normalizeText(row.inventory.shelfCode || "") === normalizeText(shelf.code)
     );
     return { shelf, location, inventory };
   },
@@ -476,9 +497,9 @@ const localRepository: Repository = {
 
   async listTransactions(session) {
     const database = await readDatabase();
-    return database.transactions.filter((record) =>
-      session.locationIds.includes(record.locationId)
-    );
+    return database.transactions
+      .filter((record) => session.locationIds.includes(record.locationId))
+      .sort((left, right) => right.timestamp.localeCompare(left.timestamp));
   },
 
   async listPackedOrders(session) {
@@ -669,72 +690,152 @@ const localRepository: Repository = {
       }
 
       case "unpack": {
-        const quantity = parseQuantity(payload.quantity);
-        const shelfCode = parseText(payload.shelfCode, "Shelf");
-        const inventory = requireInventory(database, item!.itemId, locationId, shelfCode);
-        if (!inventory) {
-          throw new Error("Shelf does not match the packed stock record.");
-        }
-        if (inventory.quantityPacked < quantity) {
-          throw new Error("Quantity cannot exceed packed stock.");
-        }
-        const previousValue = { ...inventory };
-        inventory.quantityPacked -= quantity;
-        if (parseText(payload.returnDisposition, "Return disposition") === "quarantine") {
-          inventory.quantityQuarantined += quantity;
-          inventory.status = "quarantined";
-        } else {
-          inventory.quantityAvailable += quantity;
-          inventory.status = "unpacked";
-        }
-        inventory.lastUpdatedAt = new Date().toISOString();
-        const unpack: UnpackRecord = {
-          unpackId: createId("unpack"),
-          itemId: item!.itemId,
-          locationId,
-          shelfCode,
-          quantity,
-          unpackReason: parseText(payload.unpackReason, "Unpack reason"),
-          returnDisposition: parseText(
-            payload.returnDisposition,
-            "Return disposition"
-          ) as UnpackRecord["returnDisposition"],
-          notes,
-          unpackedBy: session.userId,
-          unpackedByName: session.fullName,
-          unpackedAt: new Date().toISOString()
-        };
-        database.unpackLog.unshift(unpack);
-        const transaction = buildTransaction({
-          item,
-          session,
-          quantity,
-          transactionType: "unpack",
-          locationId,
-          shelfCode,
-          notes,
-          reasonCode: unpack.unpackReason,
-          previousValue,
-          newValue: inventory,
-          status: inventory.status
-        });
-        appendTransactionAndAudit(
-          database,
-          transaction,
-          buildAudit({
-            actionType: "unpack",
-            session,
-            locationId,
-            quantity,
-            item,
-            shelfCode,
-            notes,
-            previousValue,
-            newValue: unpack
-          })
+        const packingOrderId = parseText(payload.packingOrderId, "Packed order");
+        const order = database.packingOrders.find(
+          (record) =>
+            record.packingOrderId === packingOrderId &&
+            session.locationIds.includes(record.locationId)
         );
+        if (!order) {
+          throw new Error("Packed order not found.");
+        }
+
+        const rawRows = Array.isArray(payload.rows)
+          ? (payload.rows as Array<Record<string, unknown>>)
+          : [];
+        const unpackRows = rawRows
+          .map((row) => ({
+            packingOrderItemId: String(row.packingOrderItemId || ""),
+            quantity: Number(row.quantity || 0)
+          }))
+          .filter((row) => row.packingOrderItemId && row.quantity > 0);
+
+        if (!unpackRows.length) {
+          throw new Error("Enter a quantity to unpack for at least one item.");
+        }
+
+        const returnDisposition = parseText(
+          payload.returnDisposition,
+          "Return disposition"
+        ) as UnpackRecord["returnDisposition"];
+        const unpackReason = parseText(payload.unpackReason, "Unpack reason");
+        const orderItems = database.packingOrderItems.filter(
+          (row) => row.packingOrderId === order.packingOrderId
+        );
+        const unpacks: UnpackRecord[] = [];
+        let transaction: TransactionRecord | undefined;
+        let inventory: InventoryRecord | undefined;
+        let lastItem: ItemRecord | undefined;
+
+        for (const row of unpackRows) {
+          const orderItem = orderItems.find(
+            (entry) => entry.packingOrderItemId === row.packingOrderItemId
+          );
+          if (!orderItem) {
+            throw new Error("Packed order line not found.");
+          }
+
+          const remainingQuantity =
+            orderItem.quantity - Number(orderItem.unpackedQuantity || 0);
+          if (row.quantity > remainingQuantity) {
+            throw new Error(`Quantity cannot exceed remaining packed stock for ${orderItem.sku}.`);
+          }
+
+          const currentItem = database.items.find(
+            (entry) => entry.itemId === orderItem.itemId
+          );
+          if (!currentItem) {
+            throw new Error(`Item not found for ${orderItem.sku}.`);
+          }
+
+          const currentInventory = requireInventory(
+            database,
+            orderItem.itemId,
+            order.locationId,
+            orderItem.shelfCode
+          );
+          if (!currentInventory) {
+            throw new Error(`Shelf ${orderItem.shelfCode} does not match the packed stock record.`);
+          }
+          if (currentInventory.quantityPacked < row.quantity) {
+            throw new Error(`Quantity cannot exceed packed stock for ${orderItem.sku}.`);
+          }
+
+          const previousValue = { ...currentInventory };
+          currentInventory.quantityPacked -= row.quantity;
+          if (returnDisposition === "quarantine") {
+            currentInventory.quantityQuarantined += row.quantity;
+            currentInventory.status = "quarantined";
+          } else {
+            currentInventory.quantityAvailable += row.quantity;
+            currentInventory.status = "unpacked";
+          }
+          currentInventory.lastUpdatedAt = new Date().toISOString();
+          orderItem.unpackedQuantity = Number(orderItem.unpackedQuantity || 0) + row.quantity;
+
+          const unpack: UnpackRecord = {
+            unpackId: createId("unpack"),
+            itemId: currentItem.itemId,
+            packingOrderId: order.packingOrderId,
+            packingOrderItemId: orderItem.packingOrderItemId,
+            orderNumber: order.orderNumber,
+            locationId: order.locationId,
+            shelfCode: orderItem.shelfCode,
+            quantity: row.quantity,
+            unpackReason,
+            returnDisposition,
+            notes,
+            unpackedBy: session.userId,
+            unpackedByName: session.fullName,
+            unpackedAt: new Date().toISOString()
+          };
+          database.unpackLog.unshift(unpack);
+          transaction = buildTransaction({
+            item: currentItem,
+            session,
+            quantity: row.quantity,
+            transactionType: "unpack",
+            locationId: order.locationId,
+            shelfCode: orderItem.shelfCode,
+            notes,
+            reasonCode: unpack.unpackReason,
+            referenceNumber: order.orderNumber,
+            previousValue,
+            newValue: currentInventory,
+            status: currentInventory.status
+          });
+          appendTransactionAndAudit(
+            database,
+            transaction,
+            buildAudit({
+              actionType: "unpack",
+              session,
+              locationId: order.locationId,
+              quantity: row.quantity,
+              item: currentItem,
+              shelfCode: orderItem.shelfCode,
+              referenceNumber: order.orderNumber,
+              notes,
+              previousValue,
+              newValue: unpack
+            })
+          );
+          unpacks.unshift(unpack);
+          inventory = currentInventory;
+          lastItem = currentItem;
+        }
+
+        syncPackingOrder(order, orderItems);
         await writeDatabase(database);
-        return { message: "Unpack saved.", item, inventory, unpack, transaction };
+        return {
+          message: "Unpack saved.",
+          item: lastItem,
+          inventory,
+          unpack: unpacks[0],
+          unpacks,
+          packingOrder: order,
+          transaction
+        };
       }
 
       case "receive":

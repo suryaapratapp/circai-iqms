@@ -1,22 +1,28 @@
 "use client";
 
-import { useState } from "react";
 import { ScanLine } from "lucide-react";
-import type { ShelfRecord } from "@/lib/data/types";
+import type { ItemRecord } from "@/lib/data/types";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ScannerModal } from "@/components/workflows/scanner-modal";
+import { useState } from "react";
 
-export function ShelfInput({
-  shelves,
+export function ItemSelect({
+  items,
   value,
   onChange,
-  placeholder = "Scan, select, or enter shelf"
+  placeholder = "Scan, search, or select item",
+  onBlur,
+  onDetected,
+  onOptionSelect
 }: {
-  shelves: ShelfRecord[];
+  items: ItemRecord[];
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  onBlur?: () => void;
+  onDetected?: (value: string) => void;
+  onOptionSelect?: (value: string) => void;
 }) {
   const [scannerOpen, setScannerOpen] = useState(false);
 
@@ -24,17 +30,15 @@ export function ShelfInput({
     <div className="flex gap-3">
       <SearchableSelect
         className="flex-1"
-        emptyMessage="No matching shelves."
+        emptyMessage="No matching items."
+        onBlur={onBlur}
         onChange={onChange}
-        options={shelves.map((shelf) => ({
-          value: shelf.code,
-          label: shelf.code,
-          description: [shelf.zone, shelf.aisle, shelf.rack, shelf.shelf]
-            .filter(Boolean)
-            .join(" • "),
-          searchText: [shelf.code, shelf.zone, shelf.aisle, shelf.rack, shelf.shelf]
-            .filter(Boolean)
-            .join(" ")
+        onOptionSelect={onOptionSelect}
+        options={items.map((item) => ({
+          value: item.sku || item.itemId,
+          label: item.itemName,
+          description: [item.sku, item.upc].filter(Boolean).join(" • "),
+          searchText: [item.sku, item.upc, item.qrCode, item.itemName].filter(Boolean).join(" ")
         }))}
         placeholder={placeholder}
         value={value}
@@ -48,6 +52,7 @@ export function ShelfInput({
         onClose={() => setScannerOpen(false)}
         onDetected={(scanValue) => {
           onChange(scanValue);
+          onDetected?.(scanValue);
           setScannerOpen(false);
         }}
         open={scannerOpen}

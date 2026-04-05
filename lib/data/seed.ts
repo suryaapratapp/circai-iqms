@@ -465,9 +465,12 @@ function makePacking(now: Date): {
         packedBy: "user_supervisor",
         packedByName: "Supervisor User",
         packedAt: iso(subHours(now, 2)),
+        status: "partially unpacked",
         totalLines: 2,
         totalQuantity: 28,
-        pdfFileId: fileId
+        unpackedQuantity: 2,
+        pdfFileId: fileId,
+        updatedAt: iso(subHours(now, 1))
       }
     ],
     packingOrderItems: [
@@ -479,7 +482,8 @@ function makePacking(now: Date): {
         upc: "5011259898443",
         productName: "Sterile Packaging Tie",
         shelfCode: "P4",
-        quantity: 20
+        quantity: 20,
+        unpackedQuantity: 2
       },
       {
         packingOrderItemId: "pack_item_2",
@@ -489,7 +493,8 @@ function makePacking(now: Date): {
         upc: "5011816096899",
         productName: "Procedure Drape",
         shelfCode: "P2",
-        quantity: 8
+        quantity: 8,
+        unpackedQuantity: 0
       }
     ],
     pdfLogs: [
@@ -509,6 +514,9 @@ function makeUnpackLog(now: Date): UnpackRecord[] {
     {
       unpackId: "unpack_1",
       itemId: "item_rz-pack-100",
+      packingOrderId: "pack_order_1",
+      packingOrderItemId: "pack_item_1",
+      orderNumber: "ORD-2026-0009",
       locationId: "loc_hyderabad-dispatch-center",
       shelfCode: "P4",
       quantity: 2,

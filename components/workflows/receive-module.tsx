@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Camera, Plus, ScanLine, Trash2 } from "lucide-react";
+import { Camera, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { SearchItemResult, WorkflowLookupsData } from "@/lib/data/repository";
 import type { QualityResult } from "@/lib/data/types";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Field, inputClassName } from "@/components/ui/field";
 import { SurfaceCard } from "@/components/ui/surface-card";
-import { ScannerModal } from "@/components/workflows/scanner-modal";
+import { ItemSelect } from "@/components/workflows/item-select";
 import { ShelfInput } from "@/components/workflows/shelf-input";
 
 interface LineDraft {
@@ -51,7 +51,6 @@ export function ReceiveModule({
   const [poNotes, setPoNotes] = useState("");
   const [poPhotoFileId, setPoPhotoFileId] = useState<string | undefined>();
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
-  const [scannerIndex, setScannerIndex] = useState<number | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -273,18 +272,27 @@ export function ReceiveModule({
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="Scan item or search SKU">
-                    <div className="flex gap-3">
-                      <input
-                        className={inputClassName()}
-                        onBlur={() => line.code && fillItem(index, line.code)}
-                        onChange={(event) => updateLine(index, { code: event.target.value })}
-                        placeholder="Scan item"
-                        value={line.code}
-                      />
-                      <Button onClick={() => setScannerIndex(index)} variant="ghost">
-                        <ScanLine className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <ItemSelect
+                      items={lookups.items || []}
+                      onBlur={() => {
+                        if (line.code) {
+                          void fillItem(index, line.code);
+                        }
+                      }}
+                      onChange={(value) => updateLine(index, { code: value })}
+                      onDetected={(value) => {
+                        if (value) {
+                          void fillItem(index, value);
+                        }
+                      }}
+                      onOptionSelect={(value) => {
+                        if (value) {
+                          void fillItem(index, value);
+                        }
+                      }}
+                      placeholder="Scan, search, or select item"
+                      value={line.code}
+                    />
                   </Field>
 
                   <Field label="Product Name">
@@ -442,18 +450,6 @@ export function ReceiveModule({
           </div>
         </SurfaceCard>
       ) : null}
-
-      <ScannerModal
-        onClose={() => setScannerIndex(null)}
-        onDetected={(value) => {
-          if (scannerIndex === null) {
-            return;
-          }
-          fillItem(scannerIndex, value);
-          setScannerIndex(null);
-        }}
-        open={scannerIndex !== null}
-      />
 
       <ConfirmModal
         confirmLabel={saving ? "Saving..." : "Confirm receipt"}

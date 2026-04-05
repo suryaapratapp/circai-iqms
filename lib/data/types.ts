@@ -22,6 +22,7 @@ export type RepairStatus =
   | "repaired"
   | "beyond repair"
   | "returned to stock";
+export type PackingOrderStatus = "packed" | "partially unpacked" | "unpacked";
 export type WorkflowType =
   | "receive"
   | "damage-item"
@@ -259,10 +260,13 @@ export interface PackingOrderRecord {
   packedBy: string;
   packedByName: string;
   packedAt: string;
+  status: PackingOrderStatus;
   notes?: string;
   totalLines: number;
   totalQuantity: number;
+  unpackedQuantity: number;
   pdfFileId?: string;
+  updatedAt: string;
 }
 
 export interface PackingOrderItemRecord {
@@ -274,11 +278,15 @@ export interface PackingOrderItemRecord {
   productName: string;
   shelfCode: string;
   quantity: number;
+  unpackedQuantity: number;
 }
 
 export interface UnpackRecord {
   unpackId: string;
   itemId: string;
+  packingOrderId: string;
+  packingOrderItemId?: string;
+  orderNumber?: string;
   locationId: string;
   shelfCode?: string;
   quantity: number;

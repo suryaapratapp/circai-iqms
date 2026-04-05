@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, ScanLine, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { WorkflowLookupsData } from "@/lib/data/repository";
 import { Button } from "@/components/ui/button";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { Field, inputClassName } from "@/components/ui/field";
 import { SurfaceCard } from "@/components/ui/surface-card";
-import { ScannerModal } from "@/components/workflows/scanner-modal";
+import { ItemSelect } from "@/components/workflows/item-select";
 import { ShelfInput } from "@/components/workflows/shelf-input";
 
 interface PackingRow {
@@ -33,10 +33,6 @@ export function PackingModule({
 }) {
   const [locationId, setLocationId] = useState(initialLocationId);
   const [rows, setRows] = useState<PackingRow[]>([blankRow()]);
-  const [scannerTarget, setScannerTarget] = useState<{
-    rowIndex: number;
-    field: "code";
-  } | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -96,7 +92,7 @@ export function PackingModule({
             <p className="font-heading text-3xl font-bold text-ink">Pack Order</p>
           </div>
           <div className="rounded-2xl bg-blue-50 px-4 py-3 text-sm text-slate-700">
-            Scan Item • Scan Shelf • Quantity • Add
+            Scan item, choose shelf, confirm quantity, and pack.
           </div>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -155,27 +151,18 @@ export function PackingModule({
               </div>
               <div className="grid gap-4 md:grid-cols-3">
                 <Field label="Scan Item">
-                  <div className="flex gap-3">
-                    <input
-                      className={inputClassName()}
-                      onChange={(event) =>
-                        setRows((current) =>
-                          current.map((entry, rowIndex) =>
-                            rowIndex === index
-                              ? { ...entry, code: event.target.value }
-                              : entry
-                          )
+                  <ItemSelect
+                    items={lookups.items || []}
+                    onChange={(value) =>
+                      setRows((current) =>
+                        current.map((entry, rowIndex) =>
+                          rowIndex === index ? { ...entry, code: value } : entry
                         )
-                      }
-                      value={row.code}
-                    />
-                    <Button
-                      onClick={() => setScannerTarget({ rowIndex: index, field: "code" })}
-                      variant="ghost"
-                    >
-                      <ScanLine className="h-4 w-4" />
-                    </Button>
-                  </div>
+                      )
+                    }
+                    placeholder="Scan, search, or select item"
+                    value={row.code}
+                  />
                 </Field>
                 <Field label="Scan Shelf">
                   <ShelfInput
@@ -246,24 +233,6 @@ export function PackingModule({
             ))}
         </div>
       </ConfirmModal>
-
-      <ScannerModal
-        onClose={() => setScannerTarget(null)}
-        onDetected={(value) => {
-          if (!scannerTarget) {
-            return;
-          }
-          setRows((current) =>
-            current.map((entry, rowIndex) =>
-              rowIndex === scannerTarget.rowIndex
-                ? { ...entry, [scannerTarget.field]: value }
-                : entry
-            )
-          );
-          setScannerTarget(null);
-        }}
-        open={Boolean(scannerTarget)}
-      />
     </div>
   );
 }

@@ -10,6 +10,11 @@ export const getCachedAccessibleLocations = cache(async () => {
   return getRepository().getAccessibleLocations(session);
 });
 
+export const getCachedLookups = cache(async () => {
+  const session = await getCachedSession();
+  return getRepository().getLookups(session);
+});
+
 export const getCachedWorkflowLookups = cache(async (workflow: WorkflowType) => {
   const session = await getCachedSession();
   return getRepository().getWorkflowLookups(session, workflow);

@@ -851,10 +851,13 @@ function getPackingOrders_() {
       packedBy: String(record.packedBy || ""),
       packedByName: String(record.packedByName || ""),
       packedAt: String(record.packedAt || ""),
+      status: String(record.status || "packed"),
       notes: record.notes ? String(record.notes) : "",
       totalLines: parseNumber_(record.totalLines, 0),
       totalQuantity: parseNumber_(record.totalQuantity, 0),
-      pdfFileId: record.pdfFileId ? String(record.pdfFileId) : ""
+      unpackedQuantity: parseNumber_(record.unpackedQuantity, 0),
+      pdfFileId: record.pdfFileId ? String(record.pdfFileId) : "",
+      updatedAt: String(record.updatedAt || record.packedAt || "")
     };
   });
 }
@@ -869,7 +872,8 @@ function getPackingOrderItems_() {
       upc: String(record.upc || ""),
       productName: String(record.productName || ""),
       shelfCode: String(record.shelfCode || ""),
-      quantity: parseNumber_(record.quantity, 0)
+      quantity: parseNumber_(record.quantity, 0),
+      unpackedQuantity: parseNumber_(record.unpackedQuantity, 0)
     };
   });
 }
@@ -966,6 +970,26 @@ function getPdfLogs_() {
   });
 }
 
+function getPackingOrderStatus_(totalQuantity, unpackedQuantity) {
+  if (unpackedQuantity <= 0) {
+    return "packed";
+  }
+  if (unpackedQuantity >= totalQuantity) {
+    return "unpacked";
+  }
+  return "partially unpacked";
+}
+
+function syncPackingOrder_(order, items) {
+  const unpackedQuantity = items.reduce(function (sum, item) {
+    return sum + parseNumber_(item.unpackedQuantity, 0);
+  }, 0);
+  order.unpackedQuantity = unpackedQuantity;
+  order.status = getPackingOrderStatus_(order.totalQuantity, unpackedQuantity);
+  order.updatedAt = new Date().toISOString();
+  updateRecord_(CONFIG.SHEETS.PACKING_ORDERS, "packingOrderId", order.packingOrderId, order);
+}
+
 function getLocationMap_() {
   const map = {};
   getLocations_().forEach(function (location) {
@@ -1010,7 +1034,11 @@ function rowsForSession_(session) {
 }
 
 function getTransactions_(session) {
-  return scopeRecords_(getTransactionsRaw_(), requireSession_(session), "locationId");
+  return scopeRecords_(getTransactionsRaw_(), requireSession_(session), "locationId").sort(
+    function (a, b) {
+      return String(b.timestamp).localeCompare(String(a.timestamp));
+    }
+  );
 }
 
 function getRecentTransactions_(session, limit) {
@@ -1095,25 +1123,19 @@ function findShelfByCode_(code, locationId) {
 }
 
 function findInventoryRecord_(itemId, locationId, shelfCode) {
+  const normalisedShelfCode = normalise_(shelfCode || "");
   return getInventory_().find(function (inventory) {
     return (
       String(inventory.itemId) === String(itemId) &&
       String(inventory.locationId) === String(locationId) &&
-      (!shelfCode || normalise_(inventory.shelfCode) === normalise_(shelfCode))
+      normalise_(inventory.shelfCode || "") === normalisedShelfCode
     );
   });
 }
 
 function ensureInventoryRecord_(item, locationId, shelfCode, batchLot, expiryDate) {
   const shelf = shelfCode ? findShelfByCode_(shelfCode, locationId) : null;
-  const existing =
-    findInventoryRecord_(item.itemId, locationId, shelfCode) ||
-    getInventory_().find(function (inventory) {
-      return (
-        inventory.itemId === item.itemId &&
-        inventory.locationId === locationId
-      );
-    });
+  const existing = findInventoryRecord_(item.itemId, locationId, shelfCode);
 
   if (existing) {
     return existing;
@@ -1389,6 +1411,7 @@ function getDashboard_(session) {
 function getWorkflowLookups_(session, payload) {
   const activeSession = requireSession_(session);
   const includeShelves = parseBoolean_(payload.includeShelves);
+  const includeItems = parseBoolean_(payload.includeItems);
   const includeReasonCodes = parseBoolean_(payload.includeReasonCodes);
   const includeQualityTemplates = parseBoolean_(payload.includeQualityTemplates);
 
@@ -1397,6 +1420,7 @@ function getWorkflowLookups_(session, payload) {
     shelves: includeShelves
       ? scopeRecords_(getShelves_(), activeSession, "locationId")
       : undefined,
+    items: includeItems ? getItems_() : undefined,
     reasonCodes: includeReasonCodes ? getReasonCodes_() : undefined,
     qualityTemplates: includeQualityTemplates
       ? getQualityTemplates_().filter(function (template) {
@@ -1445,7 +1469,10 @@ function searchByShelf_(code, session) {
     return entry.locationId === shelf.locationId;
   });
   const inventory = rowsForSession_(activeSession).filter(function (row) {
-    return normalise_(row.inventory.shelfCode) === normalise_(shelf.code);
+    return (
+      String(row.inventory.locationId) === String(shelf.locationId) &&
+      normalise_(row.inventory.shelfCode || "") === normalise_(shelf.code)
+    );
   });
 
   return { shelf: shelf, location: location, inventory: inventory };
@@ -1878,81 +1905,150 @@ function repairItem_(payload) {
 function unpackOrder_(payload) {
   const data = unwrapPayload_(payload);
   const session = requireSession_(payload.session || data.session);
-  const locationId = resolveLocationId_(session, data.locationId);
-  const item = findItemByCode_(parseText_(data.code, "Item"));
-  if (!item) {
-    throw new Error("Item not found for the scanned code.");
+  const packingOrderId = parseText_(data.packingOrderId, "Packed order");
+  const order = scopeRecords_(getPackingOrders_(), session, "locationId").find(function (entry) {
+    return entry.packingOrderId === packingOrderId;
+  });
+  if (!order) {
+    throw new Error("Packed order not found.");
   }
 
-  const quantity = parsePositiveNumber_(data.quantity, "Quantity");
-  const shelfCode = parseText_(data.shelfCode, "Shelf");
-  const inventory = findInventoryRecord_(item.itemId, locationId, shelfCode);
-  if (!inventory) {
-    throw new Error("Shelf does not match the packed stock record.");
-  }
-  if (inventory.quantityPacked < quantity) {
-    throw new Error("Quantity cannot exceed packed stock.");
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  const unpackRows = rows
+    .map(function (row) {
+      return {
+        packingOrderItemId: String(row.packingOrderItemId || ""),
+        quantity: parseNumber_(row.quantity, 0)
+      };
+    })
+    .filter(function (row) {
+      return row.packingOrderItemId && row.quantity > 0;
+    });
+  if (!unpackRows.length) {
+    throw new Error("Enter a quantity to unpack for at least one item.");
   }
 
-  const previousValue = cloneObject_(inventory);
-  inventory.quantityPacked -= quantity;
-  if (parseText_(data.returnDisposition, "Return disposition") === "quarantine") {
-    inventory.quantityQuarantined += quantity;
-    inventory.status = "quarantined";
-  } else {
-    inventory.quantityAvailable += quantity;
-    inventory.status = "unpacked";
-  }
-  inventory.lastUpdatedAt = new Date().toISOString();
-  saveInventory_(inventory);
+  const orderItems = getPackingOrderItems_().filter(function (row) {
+    return row.packingOrderId === order.packingOrderId;
+  });
+  const returnDisposition = parseText_(data.returnDisposition, "Return disposition");
+  const unpackReason = parseText_(data.unpackReason, "Unpack reason");
+  const unpacks = [];
+  let lastItem = null;
+  let lastInventory = null;
+  let lastTransaction = null;
 
-  const unpack = {
-    unpackId: createId_("unpack"),
-    itemId: item.itemId,
-    locationId: locationId,
-    shelfCode: shelfCode,
-    quantity: quantity,
-    unpackReason: parseText_(data.unpackReason, "Unpack reason"),
-    returnDisposition: parseText_(data.returnDisposition, "Return disposition"),
-    notes: data.notes ? String(data.notes) : "",
-    unpackedBy: session.userId,
-    unpackedByName: session.fullName,
-    unpackedAt: new Date().toISOString()
-  };
-  appendRecord_(CONFIG.SHEETS.UNPACK_LOG, unpack);
+  unpackRows.forEach(function (row) {
+    const orderItem = orderItems.find(function (entry) {
+      return entry.packingOrderItemId === row.packingOrderItemId;
+    });
+    if (!orderItem) {
+      throw new Error("Packed order line not found.");
+    }
 
-  const transaction = appendTransaction_({
-    item: item,
-    session: session,
-    quantity: quantity,
-    transactionType: "unpack",
-    locationId: locationId,
-    shelfCode: shelfCode,
-    notes: data.notes || "",
-    reasonCode: unpack.unpackReason,
-    previousValue: previousValue,
-    newValue: inventory,
-    status: inventory.status
+    const remainingQuantity =
+      parseNumber_(orderItem.quantity, 0) - parseNumber_(orderItem.unpackedQuantity, 0);
+    if (row.quantity > remainingQuantity) {
+      throw new Error("Quantity cannot exceed remaining packed stock for " + orderItem.sku + ".");
+    }
+
+    const item = getItems_().find(function (entry) {
+      return entry.itemId === orderItem.itemId;
+    });
+    if (!item) {
+      throw new Error("Item not found for " + orderItem.sku + ".");
+    }
+
+    const inventory = findInventoryRecord_(orderItem.itemId, order.locationId, orderItem.shelfCode);
+    if (!inventory) {
+      throw new Error("Shelf " + orderItem.shelfCode + " does not match the packed stock record.");
+    }
+    if (inventory.quantityPacked < row.quantity) {
+      throw new Error("Quantity cannot exceed packed stock for " + orderItem.sku + ".");
+    }
+
+    const previousValue = cloneObject_(inventory);
+    inventory.quantityPacked -= row.quantity;
+    if (returnDisposition === "quarantine") {
+      inventory.quantityQuarantined += row.quantity;
+      inventory.status = "quarantined";
+    } else {
+      inventory.quantityAvailable += row.quantity;
+      inventory.status = "unpacked";
+    }
+    inventory.lastUpdatedAt = new Date().toISOString();
+    saveInventory_(inventory);
+
+    orderItem.unpackedQuantity = parseNumber_(orderItem.unpackedQuantity, 0) + row.quantity;
+    updateRecord_(
+      CONFIG.SHEETS.PACKING_ORDER_ITEMS,
+      "packingOrderItemId",
+      orderItem.packingOrderItemId,
+      orderItem
+    );
+
+    const unpack = {
+      unpackId: createId_("unpack"),
+      itemId: item.itemId,
+      packingOrderId: order.packingOrderId,
+      packingOrderItemId: orderItem.packingOrderItemId,
+      orderNumber: order.orderNumber,
+      locationId: order.locationId,
+      shelfCode: orderItem.shelfCode,
+      quantity: row.quantity,
+      unpackReason: unpackReason,
+      returnDisposition: returnDisposition,
+      notes: data.notes ? String(data.notes) : "",
+      unpackedBy: session.userId,
+      unpackedByName: session.fullName,
+      unpackedAt: new Date().toISOString()
+    };
+    appendRecord_(CONFIG.SHEETS.UNPACK_LOG, unpack);
+
+    const transaction = appendTransaction_({
+      item: item,
+      session: session,
+      quantity: row.quantity,
+      transactionType: "unpack",
+      locationId: order.locationId,
+      shelfCode: orderItem.shelfCode,
+      notes: data.notes || "",
+      reasonCode: unpack.unpackReason,
+      referenceNumber: order.orderNumber,
+      previousValue: previousValue,
+      newValue: inventory,
+      status: inventory.status
+    });
+
+    appendAudit_({
+      actionType: "unpack",
+      session: session,
+      locationId: order.locationId,
+      quantity: row.quantity,
+      item: item,
+      shelfCode: orderItem.shelfCode,
+      referenceNumber: order.orderNumber,
+      notes: data.notes || "",
+      previousValue: previousValue,
+      newValue: unpack
+    });
+
+    unpacks.push(unpack);
+    lastItem = item;
+    lastInventory = inventory;
+    lastTransaction = transaction;
   });
 
-  appendAudit_({
-    actionType: "unpack",
-    session: session,
-    locationId: locationId,
-    quantity: quantity,
-    item: item,
-    shelfCode: shelfCode,
-    notes: data.notes || "",
-    previousValue: previousValue,
-    newValue: unpack
-  });
+  syncPackingOrder_(order, orderItems);
 
   return {
     message: "Unpack saved.",
-    item: item,
-    inventory: inventory,
-    unpack: unpack,
-    transaction: transaction
+    item: lastItem,
+    inventory: lastInventory,
+    unpack: unpacks.length ? unpacks[0] : null,
+    unpacks: unpacks,
+    packingOrder: order,
+    transaction: lastTransaction
   };
 }
 
@@ -2021,7 +2117,8 @@ function packOrder_(payload) {
       upc: item.upc,
       productName: item.itemName,
       shelfCode: shelf.code,
-      quantity: quantity
+      quantity: quantity,
+      unpackedQuantity: 0
     };
     lineItems.push(orderItem);
     appendRecord_(CONFIG.SHEETS.PACKING_ORDER_ITEMS, orderItem);
@@ -2061,12 +2158,15 @@ function packOrder_(payload) {
     packedBy: session.userId,
     packedByName: session.fullName,
     packedAt: new Date().toISOString(),
+    status: "packed",
     notes: data.notes ? String(data.notes) : "",
     totalLines: lineItems.length,
     totalQuantity: lineItems.reduce(function (sum, item) {
       return sum + item.quantity;
     }, 0),
-    pdfFileId: ""
+    unpackedQuantity: 0,
+    pdfFileId: "",
+    updatedAt: new Date().toISOString()
   };
   appendRecord_(CONFIG.SHEETS.PACKING_ORDERS, order);
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { PackedOrderDetail } from "@/lib/data/repository";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { formatDateTime } from "@/lib/utils/format";
 
@@ -24,9 +25,12 @@ export function PackedOrderDetailCard({
               {detail.location?.name || detail.order.locationId}
             </p>
           </div>
-          <Link href={`/api/packing-orders/${detail.order.packingOrderId}/pdf`} target="_blank">
-            <Button>Open packing slip</Button>
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <StatusBadge value={detail.order.status || "packed"} />
+            <Link href={`/api/packing-orders/${detail.order.packingOrderId}/pdf`} target="_blank">
+              <Button>Open packing slip</Button>
+            </Link>
+          </div>
         </div>
       </SurfaceCard>
       <div className="space-y-3">
@@ -36,14 +40,20 @@ export function PackedOrderDetailCard({
             <p className="mt-1 text-sm text-slate-600">
               {item.sku} • {item.upc}
             </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl bg-slate-100 px-4 py-4">
                 <p className="text-sm text-slate-500">Shelf</p>
                 <p className="mt-1 font-semibold text-ink">{item.shelfCode}</p>
               </div>
               <div className="rounded-2xl bg-slate-100 px-4 py-4">
-                <p className="text-sm text-slate-500">Quantity</p>
+                <p className="text-sm text-slate-500">Packed quantity</p>
                 <p className="mt-1 font-semibold text-ink">{item.quantity}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-100 px-4 py-4">
+                <p className="text-sm text-slate-500">Remaining to unpack</p>
+                <p className="mt-1 font-semibold text-ink">
+                  {Math.max(0, item.quantity - Number(item.unpackedQuantity || 0))}
+                </p>
               </div>
             </div>
           </SurfaceCard>

@@ -49,6 +49,7 @@ export interface LookupsData {
 export interface WorkflowLookupsData {
   locations: LocationRecord[];
   shelves?: ShelfRecord[];
+  items?: ItemRecord[];
   reasonCodes?: ReasonCodeRecord[];
   qualityTemplates?: QualityTemplate[];
 }
@@ -113,10 +114,12 @@ export interface WorkflowResponse {
   item?: ItemRecord;
   inventory?: InventoryRecord;
   transaction?: TransactionRecord;
+  packingOrder?: PackingOrderRecord;
   qualityCheck?: QualityCheckRecord;
   damage?: DamageRecord;
   repair?: RepairRecord;
   unpack?: UnpackRecord;
+  unpacks?: UnpackRecord[];
   exception?: ExceptionRecord;
 }
 
@@ -192,7 +195,7 @@ export function resolveLocation(
 export function requireItemByCode(database: DatabaseShape, query: string) {
   const normalized = normalizeText(query);
   return database.items.find((candidate) =>
-    [candidate.upc, candidate.qrCode, candidate.sku, candidate.itemName]
+    [candidate.itemId, candidate.upc, candidate.qrCode, candidate.sku, candidate.itemName]
       .filter(Boolean)
       .map((value) => normalizeText(value))
       .includes(normalized)
@@ -221,12 +224,14 @@ export function getWorkflowLookupRequirements(workflow: WorkflowType) {
     case "receive":
       return {
         includeShelves: true,
+        includeItems: true,
         includeReasonCodes: false,
         includeQualityTemplates: false
       };
     case "packing":
       return {
         includeShelves: true,
+        includeItems: true,
         includeReasonCodes: false,
         includeQualityTemplates: false
       };
@@ -235,12 +240,14 @@ export function getWorkflowLookupRequirements(workflow: WorkflowType) {
     case "unpack":
       return {
         includeShelves: true,
+        includeItems: true,
         includeReasonCodes: true,
         includeQualityTemplates: false
       };
     default:
       return {
         includeShelves: false,
+        includeItems: false,
         includeReasonCodes: false,
         includeQualityTemplates: false
       };

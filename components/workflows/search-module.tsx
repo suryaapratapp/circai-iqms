@@ -2,29 +2,31 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import type {
+  LookupsData,
   SearchItemResult,
-  SearchShelfResult,
-  WorkflowLookupsData
+  SearchShelfResult
 } from "@/lib/data/repository";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SurfaceCard } from "@/components/ui/surface-card";
-import { ScannerModal } from "@/components/workflows/scanner-modal";
+import { ItemSelect } from "@/components/workflows/item-select";
 import { ShelfInput } from "@/components/workflows/shelf-input";
 import { formatDateTime, formatQuantity } from "@/lib/utils/format";
 
 type SearchMode = "item" | "shelf";
 
-export function SearchModule({ lookups }: { lookups: WorkflowLookupsData }) {
+export function SearchModule({
+  lookups
+}: {
+  lookups: Pick<LookupsData, "items" | "shelves">;
+}) {
   const [mode, setMode] = useState<SearchMode>("item");
   const [itemQuery, setItemQuery] = useState("");
   const [shelfQuery, setShelfQuery] = useState("");
   const [loading, setLoading] = useState(false);
-  const [scannerTarget, setScannerTarget] = useState<"item" | null>(null);
   const [result, setResult] = useState<
     | { kind: "item"; data: SearchItemResult }
     | { kind: "shelf"; data: SearchShelfResult }
@@ -98,21 +100,31 @@ export function SearchModule({ lookups }: { lookups: WorkflowLookupsData }) {
 
         <div className="mt-6 grid gap-4">
           {mode === "item" ? (
-            <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  className="w-full rounded-[18px] border border-slate-200 bg-slate-50/80 py-3.5 pl-11 pr-4 text-sm outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                  onChange={(event) => setItemQuery(event.target.value)}
-                  placeholder="Scan or enter SKU / UPC / barcode / QR"
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+              <div>
+                <ItemSelect
+                  items={lookups.items || []}
+                  onBlur={() => {
+                    if (itemQuery) {
+                      void runSearch("item", itemQuery);
+                    }
+                  }}
+                  onChange={(value) => setItemQuery(value)}
+                  onDetected={(value) => {
+                    if (value) {
+                      void runSearch("item", value);
+                    }
+                  }}
+                  onOptionSelect={(value) => {
+                    if (value) {
+                      void runSearch("item", value);
+                    }
+                  }}
+                  placeholder="Scan, search, or select item"
                   value={itemQuery}
                 />
               </div>
               <div className="flex gap-3">
-                <Button className="gap-2" onClick={() => setScannerTarget("item")} variant="secondary">
-                  <ScanLine className="h-4 w-4" />
-                  Scan Item
-                </Button>
                 <Button disabled={loading} onClick={() => runSearch("item")}>
                   {loading ? "Searching..." : "Search"}
                 </Button>
@@ -270,19 +282,6 @@ export function SearchModule({ lookups }: { lookups: WorkflowLookupsData }) {
       ) : (
         <EmptyState description="Try another code or scan again." title="Item not found" />
       )}
-
-      <ScannerModal
-        onClose={() => setScannerTarget(null)}
-        onDetected={(value) => {
-          if (!scannerTarget) {
-            return;
-          }
-          setItemQuery(value);
-          void runSearch("item", value);
-          setScannerTarget(null);
-        }}
-        open={scannerTarget !== null}
-      />
     </div>
   );
 }

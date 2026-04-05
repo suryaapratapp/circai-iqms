@@ -30,7 +30,40 @@ export async function readDatabase(): Promise<DatabaseShape> {
     await writeDatabase(fresh);
     return fresh;
   }
-  return parsed as DatabaseShape;
+  const database = parsed as DatabaseShape;
+  database.packingOrderItems = (database.packingOrderItems || []).map((item) => ({
+    ...item,
+    unpackedQuantity: Number(item.unpackedQuantity || 0)
+  }));
+  database.packingOrders = (database.packingOrders || []).map((order) => {
+    const unpackedQuantity =
+      typeof order.unpackedQuantity === "number"
+        ? order.unpackedQuantity
+        : database.packingOrderItems
+            .filter((item) => item.packingOrderId === order.packingOrderId)
+            .reduce((sum, item) => sum + Number(item.unpackedQuantity || 0), 0);
+    const totalQuantity = Number(order.totalQuantity || 0);
+    const status =
+      order.status ||
+      (unpackedQuantity <= 0
+        ? "packed"
+        : unpackedQuantity >= totalQuantity
+          ? "unpacked"
+          : "partially unpacked");
+    return {
+      ...order,
+      unpackedQuantity,
+      status,
+      updatedAt: order.updatedAt || order.packedAt
+    };
+  });
+  database.unpackLog = (database.unpackLog || []).map((record) => ({
+    ...record,
+    packingOrderId: record.packingOrderId || "",
+    packingOrderItemId: record.packingOrderItemId || "",
+    orderNumber: record.orderNumber || ""
+  }));
+  return database;
 }
 
 export async function writeDatabase(database: DatabaseShape) {

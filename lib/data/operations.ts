@@ -378,7 +378,8 @@ export async function createPackingOrder(
       upc: item.upc,
       productName: item.itemName,
       shelfCode: shelf.code,
-      quantity: row.quantity
+      quantity: row.quantity,
+      unpackedQuantity: 0
     });
 
     database.transactions.unshift(
@@ -419,9 +420,12 @@ export async function createPackingOrder(
     packedBy: session.userId,
     packedByName: session.fullName,
     packedAt: new Date().toISOString(),
+    status: "packed",
     notes: payload.notes,
     totalLines: items.length,
-    totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0)
+    totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
+    unpackedQuantity: 0,
+    updatedAt: new Date().toISOString()
   };
 
   database.packingOrders.unshift(packingOrder);

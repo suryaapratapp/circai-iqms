@@ -5,6 +5,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { PackedOrderListItem } from "@/lib/data/repository";
 import { Button } from "@/components/ui/button";
 import { inputClassName } from "@/components/ui/field";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { SurfaceCard } from "@/components/ui/surface-card";
 import { formatDateTime } from "@/lib/utils/format";
 
@@ -85,7 +86,8 @@ export function PackedOrdersList({
                   {entry.order.packedByName} • {formatDateTime(entry.order.packedAt)}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <StatusBadge value={entry.order.status || "packed"} />
                 <Link href={`/packed-orders/${entry.order.packingOrderId}`} prefetch={false}>
                   <Button variant="ghost">Open order</Button>
                 </Link>
@@ -96,7 +98,10 @@ export function PackedOrdersList({
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <Info label="Lines" value={String(entry.order.totalLines || entry.itemCount)} />
-              <Info label="Quantity" value={String(entry.order.totalQuantity)} />
+              <Info
+                label="Quantity"
+                value={`${entry.order.unpackedQuantity || 0} / ${entry.order.totalQuantity} unpacked`}
+              />
               <Info label="Location" value={entry.order.locationId} />
             </div>
           </SurfaceCard>

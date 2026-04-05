@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, ScanLine } from "lucide-react";
+import { ArrowUpRight, User2 } from "lucide-react";
 import { appConfig } from "@/lib/config/app";
 import type { DashboardData } from "@/lib/data/repository";
 import { Button } from "@/components/ui/button";
@@ -23,10 +23,10 @@ export function DashboardOverview({ dashboard }: { dashboard: DashboardData }) {
               Start with the next warehouse action and keep stock moving.
             </p>
           </div>
-          <Link href="/search" prefetch={false}>
+          <Link href="/profile" prefetch={false}>
             <Button className="w-full gap-2 md:w-auto">
-              <ScanLine className="h-4 w-4" />
-              Open Search
+              <User2 className="h-4 w-4" />
+              Profile
             </Button>
           </Link>
         </div>

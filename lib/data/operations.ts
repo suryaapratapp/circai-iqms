@@ -434,13 +434,13 @@ export async function createPackingOrder(
   return { order: packingOrder, items };
 }
 
-export async function getPackingSlip(orderId: string) {
+export async function getPackingSlip(orderId: string, session?: SessionUser) {
   if (isAppsScriptMode()) {
     return requestAppsScript<{
       order: PackingOrderRecord;
       items: PackingOrderItemRecord[];
       location?: { name?: string };
-    }>("getPackedOrder", { packingOrderId: orderId });
+    }>("getPackedOrder", { packingOrderId: orderId, session });
   }
 
   const database = await readDatabase();
@@ -458,15 +458,7 @@ export async function getPackingSlip(orderId: string) {
 }
 
 export async function generatePackingSlipPdf(orderId: string, session?: SessionUser) {
-  if (isAppsScriptMode()) {
-    const result = await requestAppsScript<{ base64: string }>("getPackingSlipPdf", {
-      packingOrderId: orderId,
-      session
-    });
-    return Buffer.from(result.base64, "base64");
-  }
-
-  const { order, items, location } = await getPackingSlip(orderId);
+  const { order, items, location } = await getPackingSlip(orderId, session);
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([595, 842]);
   const font = await pdf.embedFont(StandardFonts.Helvetica);

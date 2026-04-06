@@ -2224,10 +2224,16 @@ function uploadFile_(payload) {
   let storageMode = "metadata-only";
 
   if (CONFIG.UPLOADS_FOLDER_ID) {
-    const folder = DriveApp.getFolderById(CONFIG.UPLOADS_FOLDER_ID);
-    const driveFile = folder.createFile(blob);
-    driveFileId = driveFile.getId();
-    storageMode = "google-drive";
+    try {
+      const folder = DriveApp.getFolderById(CONFIG.UPLOADS_FOLDER_ID);
+      const driveFile = folder.createFile(blob);
+      driveFileId = driveFile.getId();
+      storageMode = "google-drive";
+    } catch (error) {
+      throw new Error(
+        "Drive upload is not authorised yet. Open the Apps Script project, add Drive access scopes, reauthorise, and redeploy the web app."
+      );
+    }
   }
 
   const record = {

@@ -1,4 +1,4 @@
-import { Clock3, MapPin, ScanLine, User2 } from "lucide-react";
+import { Clock3, MapPin, User2 } from "lucide-react";
 import Link from "next/link";
 import type { SessionUser } from "@/lib/data/types";
 import type { LocationRecord } from "@/lib/data/types";
@@ -59,10 +59,10 @@ export function Header({
           </div>
         </div>
         <div className="flex gap-3">
-          <Link href="/search" prefetch={false}>
+          <Link href="/profile" prefetch={false}>
             <Button className="min-w-[152px] gap-2">
-              <ScanLine className="h-4 w-4" />
-              Open Search
+              <User2 className="h-4 w-4" />
+              Profile
             </Button>
           </Link>
         </div>

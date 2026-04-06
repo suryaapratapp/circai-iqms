@@ -38,6 +38,57 @@ const emptyLine = (): LineDraft => ({
   notes: ""
 });
 
+async function compressImageForUpload(file: File) {
+  if (!file.type.startsWith("image/")) {
+    return file;
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("Unable to read the selected image."));
+      element.src = objectUrl;
+    });
+
+    const maxDimension = 1600;
+    const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return file;
+    }
+
+    context.drawImage(image, 0, 0, width, height);
+
+    const compressedBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", 0.72);
+    });
+
+    if (!compressedBlob || compressedBlob.size >= file.size) {
+      return file;
+    }
+
+    const extension =
+      file.name.lastIndexOf(".") > -1 ? file.name.slice(0, file.name.lastIndexOf(".")) : file.name;
+
+    return new File([compressedBlob], `${extension}.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now()
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export function ReceiveModule({
   lookups,
   initialLocationId
@@ -50,6 +101,7 @@ export function ReceiveModule({
   const [poNumber, setPoNumber] = useState("");
   const [poNotes, setPoNotes] = useState("");
   const [poPhotoFileId, setPoPhotoFileId] = useState<string | undefined>();
+  const [uploadingPoPhoto, setUploadingPoPhoto] = useState(false);
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -79,20 +131,32 @@ export function ReceiveModule({
   }
 
   async function uploadPoPhoto(file: File) {
-    const formData = new FormData();
-    formData.set("file", file);
-    formData.set("referenceType", "po-photo");
-    const response = await fetch("/api/files/upload", {
-      method: "POST",
-      body: formData
-    });
-    const data = (await response.json()) as { fileId?: string; error?: string };
-    if (!response.ok || !data.fileId) {
-      toast.error(data.error || "Unable to upload PO photo.");
-      return;
+    setUploadingPoPhoto(true);
+    try {
+      const formData = new FormData();
+      const optimisedFile = await compressImageForUpload(file);
+      formData.set("file", optimisedFile);
+      formData.set("referenceType", "po-photo");
+      const response = await fetch("/api/files/upload", {
+        method: "POST",
+        body: formData
+      });
+      const data = (await response.json()) as { fileId?: string; error?: string };
+      if (!response.ok || !data.fileId) {
+        toast.error(data.error || "Unable to upload PO photo.");
+        return;
+      }
+      setPoPhotoFileId(data.fileId);
+      if (optimisedFile.size < file.size) {
+        toast.success("PO photo uploaded and optimised.");
+        return;
+      }
+      toast.success("PO photo uploaded.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to upload PO photo.");
+    } finally {
+      setUploadingPoPhoto(false);
     }
-    setPoPhotoFileId(data.fileId);
-    toast.success("PO photo uploaded.");
   }
 
   async function submitReceipt() {
@@ -207,13 +271,21 @@ export function ReceiveModule({
           <Field label="Upload PO Photo (optional)">
             <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
               <Camera className="h-4 w-4 text-teal" />
-              <span>{poPhotoFileId ? "PO photo uploaded" : "Choose image"}</span>
+              <span>
+                {uploadingPoPhoto
+                  ? "Uploading PO photo..."
+                  : poPhotoFileId
+                    ? "PO photo uploaded"
+                    : "Take or choose photo"}
+              </span>
               <input
+                accept="image/*"
+                capture="environment"
                 className="hidden"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) {
-                    uploadPoPhoto(file);
+                    void uploadPoPhoto(file);
                   }
                 }}
                 type="file"

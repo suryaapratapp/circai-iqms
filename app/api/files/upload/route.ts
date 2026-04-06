@@ -9,21 +9,27 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const session = await getServerSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-  }
-  const formData = await request.formData();
-  const file = formData.get("file");
-  const meta = schema.parse({
-    referenceType: formData.get("referenceType"),
-    referenceId: formData.get("referenceId") || undefined
-  });
+  try {
+    const session = await getServerSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+    }
+    const formData = await request.formData();
+    const file = formData.get("file");
+    const meta = schema.parse({
+      referenceType: formData.get("referenceType"),
+      referenceId: formData.get("referenceId") || undefined
+    });
 
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "No file was uploaded." }, { status: 400 });
-  }
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "No file was uploaded." }, { status: 400 });
+    }
 
-  const saved = await saveUploadedFile(file, session, meta.referenceType, meta.referenceId);
-  return NextResponse.json(saved);
+    const saved = await saveUploadedFile(file, session, meta.referenceType, meta.referenceId);
+    return NextResponse.json(saved);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to upload the selected file.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 }

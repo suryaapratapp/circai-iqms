@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, User2 } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { appConfig } from "@/lib/config/app";
 import type { DashboardData } from "@/lib/data/repository";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ export function DashboardOverview({ dashboard }: { dashboard: DashboardData }) {
   return (
     <div className="space-y-5">
       <SurfaceCard className="rounded-[36px] p-6 md:p-7">
-        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+        <div className="flex flex-col gap-5">
           <div className="max-w-2xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
               {appConfig.customerContext}
@@ -23,12 +23,6 @@ export function DashboardOverview({ dashboard }: { dashboard: DashboardData }) {
               Start with the next warehouse action and keep stock moving.
             </p>
           </div>
-          <Link href="/profile" prefetch={false}>
-            <Button className="w-full gap-2 md:w-auto">
-              <User2 className="h-4 w-4" />
-              Profile
-            </Button>
-          </Link>
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           {dashboard.summaryStrip.map((item) => (

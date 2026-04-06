@@ -1,7 +1,9 @@
 const CONFIG = {
   TOKEN: PropertiesService.getScriptProperties().getProperty("API_TOKEN"),
   SPREADSHEET_ID: PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID"),
-  UPLOADS_FOLDER_ID: PropertiesService.getScriptProperties().getProperty("UPLOADS_FOLDER_ID"),
+  UPLOADS_FOLDER_ID:
+    PropertiesService.getScriptProperties().getProperty("UPLOADS_FOLDER_ID") ||
+    "18-qlwhSAaP2Sgv39Q_ogoWNMKzPWrp55",
   PDF_FOLDER_ID: PropertiesService.getScriptProperties().getProperty("PDF_FOLDER_ID"),
   SHEETS: {
     USERS: "Users",
@@ -2225,7 +2227,7 @@ function uploadFile_(payload) {
     const folder = DriveApp.getFolderById(CONFIG.UPLOADS_FOLDER_ID);
     const driveFile = folder.createFile(blob);
     driveFileId = driveFile.getId();
-    storageMode = "drive";
+    storageMode = "google-drive";
   }
 
   const record = {
@@ -2476,17 +2478,9 @@ function getPackingSlipPdf_(payload) {
   }
 
   const existingOrder = detail.order;
-  let driveFile = null;
-  if (existingOrder.pdfFileId) {
-    try {
-      driveFile = DriveApp.getFileById(existingOrder.pdfFileId);
-    } catch (_error) {
-      driveFile = null;
-    }
-  }
+  const doc = DocumentApp.create(existingOrder.orderNumber + " Packing Slip");
 
-  if (!driveFile) {
-    const doc = DocumentApp.create(existingOrder.orderNumber + " Packing Slip");
+  try {
     const body = doc.getBody();
     body.appendParagraph("IQMS").setHeading(DocumentApp.ParagraphHeading.HEADING1);
     body.appendParagraph("by CIRCAI LTD");
@@ -2530,35 +2524,15 @@ function getPackingSlipPdf_(payload) {
       .getBlob()
       .setName(existingOrder.orderNumber + "-packing-slip.pdf");
 
-    driveFile = CONFIG.PDF_FOLDER_ID
-      ? DriveApp.getFolderById(CONFIG.PDF_FOLDER_ID).createFile(pdfBlob)
-      : DriveApp.createFile(pdfBlob);
-
-    appendRecord_(CONFIG.SHEETS.PDF_LOGS, {
-      pdfId: createId_("pdf"),
-      packingOrderId: existingOrder.packingOrderId,
-      fileId: driveFile.getId(),
-      createdAt: new Date().toISOString(),
-      createdBy: session ? session.userId : existingOrder.packedBy
-    });
-
-    existingOrder.pdfFileId = driveFile.getId();
-    updateRecord_(
-      CONFIG.SHEETS.PACKING_ORDERS,
-      "packingOrderId",
-      existingOrder.packingOrderId,
-      existingOrder
-    );
-
+    return {
+      base64: Utilities.base64Encode(pdfBlob.getBytes()),
+      fileName: pdfBlob.getName()
+    };
+  } finally {
     try {
       DriveApp.getFileById(doc.getId()).setTrashed(true);
     } catch (_error) {}
   }
-
-  return {
-    base64: Utilities.base64Encode(driveFile.getBlob().getBytes()),
-    fileId: driveFile.getId()
-  };
 }
 
 function jsonResponse_(payload) {

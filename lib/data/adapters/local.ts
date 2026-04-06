@@ -706,9 +706,17 @@ const localRepository: Repository = {
         const unpackRows = rawRows
           .map((row) => ({
             packingOrderItemId: String(row.packingOrderItemId || ""),
+            itemId: String(row.itemId || ""),
+            sku: String(row.sku || ""),
+            shelfCode: String(row.shelfCode || ""),
             quantity: Number(row.quantity || 0)
           }))
-          .filter((row) => row.packingOrderItemId && row.quantity > 0);
+          .filter(
+            (row) =>
+              (row.packingOrderItemId || row.itemId || row.sku) &&
+              row.shelfCode &&
+              row.quantity > 0
+          );
 
         if (!unpackRows.length) {
           throw new Error("Enter a quantity to unpack for at least one item.");
@@ -729,7 +737,14 @@ const localRepository: Repository = {
 
         for (const row of unpackRows) {
           const orderItem = orderItems.find(
-            (entry) => entry.packingOrderItemId === row.packingOrderItemId
+            (entry) =>
+              entry.packingOrderItemId === row.packingOrderItemId ||
+              (row.itemId &&
+                entry.itemId === String(row.itemId || "") &&
+                entry.shelfCode === String(row.shelfCode || "")) ||
+              (row.sku &&
+                normalizeText(entry.sku) === normalizeText(String(row.sku || "")) &&
+                entry.shelfCode === String(row.shelfCode || ""))
           );
           if (!orderItem) {
             throw new Error("Packed order line not found.");

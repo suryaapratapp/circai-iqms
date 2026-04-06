@@ -457,10 +457,11 @@ export async function getPackingSlip(orderId: string) {
   return { order, items, location };
 }
 
-export async function generatePackingSlipPdf(orderId: string) {
+export async function generatePackingSlipPdf(orderId: string, session?: SessionUser) {
   if (isAppsScriptMode()) {
     const result = await requestAppsScript<{ base64: string }>("getPackingSlipPdf", {
-      packingOrderId: orderId
+      packingOrderId: orderId,
+      session
     });
     return Buffer.from(result.base64, "base64");
   }

@@ -1,5 +1,5 @@
 {
-  "timeZone": "Asia/Kolkata",
+  "timeZone": "Europe/London",
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
   "webapp": {

@@ -1596,6 +1596,26 @@ function getPackedOrder_(packingOrderId, session) {
   };
 }
 
+function getPackedOrderById_(packingOrderId) {
+  const order = getPackingOrders_().find(function (entry) {
+    return entry.packingOrderId === String(packingOrderId || "");
+  });
+
+  if (!order) {
+    return null;
+  }
+
+  return {
+    order: order,
+    items: getPackingOrderItems_().filter(function (item) {
+      return item.packingOrderId === order.packingOrderId;
+    }),
+    location: getLocations_().find(function (location) {
+      return location.locationId === order.locationId;
+    })
+  };
+}
+
 function receiveStock_(payload) {
   const data = unwrapPayload_(payload);
   const session = requireSession_(payload.session || data.session);
@@ -1918,11 +1938,14 @@ function unpackOrder_(payload) {
     .map(function (row) {
       return {
         packingOrderItemId: String(row.packingOrderItemId || ""),
+        itemId: String(row.itemId || ""),
+        sku: String(row.sku || ""),
+        shelfCode: String(row.shelfCode || ""),
         quantity: parseNumber_(row.quantity, 0)
       };
     })
     .filter(function (row) {
-      return row.packingOrderItemId && row.quantity > 0;
+      return (row.packingOrderItemId || row.itemId || row.sku) && row.shelfCode && row.quantity > 0;
     });
   if (!unpackRows.length) {
     throw new Error("Enter a quantity to unpack for at least one item.");
@@ -1940,7 +1963,19 @@ function unpackOrder_(payload) {
 
   unpackRows.forEach(function (row) {
     const orderItem = orderItems.find(function (entry) {
-      return entry.packingOrderItemId === row.packingOrderItemId;
+      return (
+        entry.packingOrderItemId === row.packingOrderItemId ||
+        (
+          row.itemId &&
+          String(entry.itemId || "") === String(row.itemId || "") &&
+          String(entry.shelfCode || "") === String(row.shelfCode || "")
+        ) ||
+        (
+          row.sku &&
+          normalise_(entry.sku) === normalise_(row.sku) &&
+          String(entry.shelfCode || "") === String(row.shelfCode || "")
+        )
+      );
     });
     if (!orderItem) {
       throw new Error("Packed order line not found.");
@@ -2432,14 +2467,9 @@ function normaliseHeader_(header) {
 
 function getPackingSlipPdf_(payload) {
   const session = payload.session ? requireSession_(payload.session) : null;
-  const detail = getPackedOrder_(payload.packingOrderId, session || {
-    userId: "",
-    fullName: "",
-    email: "",
-    role: "admin",
-    assignedLocationId: "",
-    locationIds: []
-  });
+  const detail = session
+    ? getPackedOrder_(payload.packingOrderId, session)
+    : getPackedOrderById_(payload.packingOrderId);
 
   if (!detail) {
     throw new Error("Pack order not found.");

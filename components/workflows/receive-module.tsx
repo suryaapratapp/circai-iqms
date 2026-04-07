@@ -18,7 +18,7 @@ interface LineDraft {
   quantityReceived: string;
   shelfCode: string;
   qualityResult: QualityResult;
-  disposition: "quarantine" | "damaged" | "repair";
+  disposition: "damaged-to-repair" | "damaged-beyond-repair";
   defectCategory: string;
   batchLot: string;
   expiryDate: string;
@@ -31,7 +31,7 @@ const emptyLine = (): LineDraft => ({
   quantityReceived: "",
   shelfCode: "",
   qualityResult: "pass",
-  disposition: "quarantine",
+  disposition: "damaged-to-repair",
   defectCategory: "",
   batchLot: "",
   expiryDate: "",
@@ -415,7 +415,10 @@ export function ReceiveModule({
                           onClick={() =>
                             updateLine(index, {
                               qualityResult: option,
-                              disposition: option === "fail" ? line.disposition : "quarantine"
+                              disposition:
+                                option === "fail"
+                                  ? line.disposition
+                                  : "damaged-to-repair"
                             })
                           }
                           type="button"
@@ -428,8 +431,8 @@ export function ReceiveModule({
 
                   {line.qualityResult === "fail" ? (
                     <Field label="Fail disposition">
-                      <div className="grid grid-cols-3 gap-2">
-                        {(["quarantine", "damaged", "repair"] as const).map((option) => (
+                      <div className="grid grid-cols-2 gap-2">
+                        {(["damaged-to-repair", "damaged-beyond-repair"] as const).map((option) => (
                           <button
                             className={`rounded-[16px] border px-3 py-3 text-sm font-semibold transition ${
                               line.disposition === option
@@ -444,11 +447,9 @@ export function ReceiveModule({
                             }
                             type="button"
                           >
-                            {option === "quarantine"
-                              ? "Quarantine"
-                              : option === "damaged"
-                                ? "Damaged"
-                                : "Repair"}
+                            {option === "damaged-to-repair"
+                              ? "Damaged (To repair)"
+                              : "Damaged (Beyond repair)"}
                           </button>
                         ))}
                       </div>
@@ -542,7 +543,13 @@ export function ReceiveModule({
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
                   Quick quality: {line.qualityResult}
-                  {line.qualityResult === "fail" ? ` • ${line.disposition}` : ""}
+                  {line.qualityResult === "fail"
+                    ? ` • ${
+                        line.disposition === "damaged-to-repair"
+                          ? "Damaged (To repair)"
+                          : "Damaged (Beyond repair)"
+                      }`
+                    : ""}
                 </p>
               </div>
             ))}

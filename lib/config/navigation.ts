@@ -3,6 +3,7 @@ import {
   ClipboardList,
   Gauge,
   History,
+  MoveRight,
   MoreHorizontal,
   PackageSearch,
   PackageCheck,
@@ -32,6 +33,7 @@ export const navigationItems: NavigationItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge, roles: ["admin", "supervisor", "operator"] },
   { href: "/receive", label: "Receive", icon: PackagePlus, roles: ["admin", "supervisor", "operator"] },
   { href: "/search", label: "Search", icon: Search, roles: ["admin", "supervisor", "operator"] },
+  { href: "/move", label: "Move", icon: MoveRight, roles: ["admin", "supervisor", "operator"] },
   { href: "/damage-item", label: "Damage Item", icon: PackageMinus, roles: ["admin", "supervisor", "operator"] },
   { href: "/repair-item", label: "Repair Item", icon: Wrench, roles: ["admin", "supervisor", "operator"] },
   { href: "/packing", label: "Pack Order", icon: PackageCheck, roles: ["admin", "supervisor", "operator"] },
@@ -50,9 +52,9 @@ export function getNavigationItemsForRole(role: UserRole) {
 
 export function getMobilePrimaryNavForRole(role: UserRole) {
   const preferredRoutesByRole: Record<UserRole, string[]> = {
-    admin: ["/receive", "/search", "/packing", "/inventory"],
-    supervisor: ["/receive", "/search", "/packing", "/inventory"],
-    operator: ["/receive", "/search", "/packing", "/repair-item"]
+    admin: ["/receive", "/search", "/move", "/packing"],
+    supervisor: ["/receive", "/search", "/move", "/packing"],
+    operator: ["/receive", "/search", "/move", "/packing"]
   };
 
   return getNavigationItemsForRole(role).filter((item) =>

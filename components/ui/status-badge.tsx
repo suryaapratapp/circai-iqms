@@ -10,6 +10,8 @@ const toneMap: Record<string, string> = {
   "quality passed": "bg-emerald-100 text-emerald-800",
   "quality failed": "bg-rose-100 text-rose-800",
   damaged: "bg-rose-100 text-rose-800",
+  "damaged (to repair)": "bg-amber-100 text-amber-800",
+  "damaged (beyond repair)": "bg-rose-100 text-rose-800",
   "under repair": "bg-slate-200 text-slate-700",
   packed: "bg-indigo-100 text-indigo-800",
   "partially unpacked": "bg-violet-100 text-violet-800",

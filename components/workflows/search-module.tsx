@@ -8,6 +8,10 @@ import type {
   SearchItemResult,
   SearchShelfResult
 } from "@/lib/data/repository";
+import {
+  getDamagedBeyondRepairQuantity,
+  getDamagedToRepairQuantity
+} from "@/lib/data/inventory";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -183,11 +187,20 @@ export function SearchModule({
                   </div>
                   <div className="mt-4 grid gap-3 md:grid-cols-4">
                     <Metric label="Available" value={formatQuantity(row.inventory.quantityAvailable)} />
-                    <Metric label="Damaged" value={formatQuantity(row.inventory.quantityDamaged)} />
-                    <Metric label="Under repair" value={formatQuantity(row.inventory.quantityUnderRepair)} />
+                    <Metric
+                      label="Damaged to repair"
+                      value={formatQuantity(getDamagedToRepairQuantity(row.inventory))}
+                    />
+                    <Metric
+                      label="Beyond repair"
+                      value={formatQuantity(getDamagedBeyondRepairQuantity(row.inventory))}
+                    />
                     <Metric label="Updated" value={formatDateTime(row.inventory.lastUpdatedAt)} />
                   </div>
                   <div className="mt-4 flex flex-wrap gap-3">
+                    <Link href="/move" prefetch={false}>
+                      <Button variant="ghost">Move</Button>
+                    </Link>
                     <Link href="/damage-item" prefetch={false}>
                       <Button variant="ghost">Damage</Button>
                     </Link>
@@ -245,9 +258,16 @@ export function SearchModule({
                     </div>
                     <StatusBadge value={match.inventory.status} />
                   </div>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <div className="mt-3 grid gap-3 sm:grid-cols-4">
                     <Metric label="Available" value={formatQuantity(match.inventory.quantityAvailable)} />
                     <Metric label="On hand" value={formatQuantity(match.inventory.quantityOnHand)} />
+                    <Metric
+                      label="Damaged"
+                      value={formatQuantity(
+                        getDamagedToRepairQuantity(match.inventory) +
+                          getDamagedBeyondRepairQuantity(match.inventory)
+                      )}
+                    />
                     <Metric label="Updated" value={formatDateTime(match.inventory.lastUpdatedAt)} />
                   </div>
                 </div>

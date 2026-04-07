@@ -1,4 +1,9 @@
 import { verifyPassword } from "@/lib/auth/password";
+import {
+  getTotalDamagedQuantity,
+  isRepairEligibleInventory,
+  syncInventoryStatus
+} from "@/lib/data/inventory";
 import { createId } from "@/lib/utils/id";
 import { readDatabase, writeDatabase } from "@/lib/data/local-db";
 import type {
@@ -120,6 +125,8 @@ function ensureInventory(
     quantityOnHand: 0,
     quantityAvailable: 0,
     quantityDamaged: 0,
+    quantityDamagedToRepair: 0,
+    quantityDamagedBeyondRepair: 0,
     quantityUnderRepair: 0,
     quantityPacked: 0,
     quantityPendingInbound: 0,
@@ -290,6 +297,7 @@ const localRepository: Repository = {
       admin: [
         { href: "/receive", label: "Receive" },
         { href: "/search", label: "Search" },
+        { href: "/move", label: "Move" },
         { href: "/damage-item", label: "Damage Item" },
         { href: "/repair-item", label: "Repair Item" },
         { href: "/packing", label: "Pack Order" },
@@ -300,6 +308,7 @@ const localRepository: Repository = {
       supervisor: [
         { href: "/receive", label: "Receive" },
         { href: "/search", label: "Search" },
+        { href: "/move", label: "Move" },
         { href: "/damage-item", label: "Damage Item" },
         { href: "/repair-item", label: "Repair Item" },
         { href: "/packing", label: "Pack Order" },
@@ -310,6 +319,7 @@ const localRepository: Repository = {
       operator: [
         { href: "/receive", label: "Receive" },
         { href: "/search", label: "Search" },
+        { href: "/move", label: "Move" },
         { href: "/damage-item", label: "Damage Item" },
         { href: "/repair-item", label: "Repair Item" },
         { href: "/packing", label: "Pack Order" }
@@ -332,8 +342,7 @@ const localRepository: Repository = {
             (sum, row) =>
               sum +
               row.inventory.quantityQuarantined +
-              row.inventory.quantityDamaged +
-              row.inventory.quantityUnderRepair,
+              getTotalDamagedQuantity(row.inventory),
             0
           )
         }
@@ -464,11 +473,6 @@ const localRepository: Repository = {
       userActivity: database.transactions.filter((record) =>
         session.locationIds.includes(record.locationId)
       ),
-      dailyTransactions: database.transactions.filter(
-        (record) =>
-          session.locationIds.includes(record.locationId) &&
-          new Date(record.timestamp).toDateString() === new Date().toDateString()
-      ),
       packingOrders: database.packingOrders.filter((record) =>
         session.locationIds.includes(record.locationId)
       )
@@ -551,6 +555,112 @@ const localRepository: Repository = {
     }
 
     switch (workflow) {
+      case "move": {
+        const quantity = parseQuantity(payload.quantity);
+        const sourceShelfCode = parseText(payload.shelfCode, "Current shelf");
+        const destinationShelfCode = parseText(
+          payload.destinationShelfCode,
+          "Destination shelf"
+        );
+
+        if (normalizeText(sourceShelfCode) === normalizeText(destinationShelfCode)) {
+          throw new Error("Source and destination shelf must be different.");
+        }
+
+        const destinationShelf = findShelf(database, destinationShelfCode, locationId);
+        if (!destinationShelf) {
+          throw new Error("Destination shelf is not recognised.");
+        }
+
+        const sourceInventory = requireInventory(
+          database,
+          item!.itemId,
+          locationId,
+          sourceShelfCode
+        );
+        if (!sourceInventory) {
+          throw new Error("Item was not found on the selected source shelf.");
+        }
+
+        checkAvailable(
+          sourceInventory,
+          quantity,
+          "Quantity cannot exceed available stock on the source shelf."
+        );
+
+        const sourcePreviousValue = { ...sourceInventory };
+        sourceInventory.quantityAvailable -= quantity;
+        sourceInventory.quantityOnHand -= quantity;
+        sourceInventory.lastUpdatedAt = new Date().toISOString();
+        syncInventoryStatus(sourceInventory);
+
+        const destinationInventory = ensureInventory(
+          database,
+          item!,
+          locationId,
+          destinationShelf.code
+        );
+        const destinationPreviousValue = { ...destinationInventory };
+        destinationInventory.shelfId = destinationShelf.shelfId;
+        destinationInventory.shelfCode = destinationShelf.code;
+        destinationInventory.quantityAvailable += quantity;
+        destinationInventory.quantityOnHand += quantity;
+        destinationInventory.lastUpdatedAt = new Date().toISOString();
+        syncInventoryStatus(destinationInventory);
+
+        const transaction = buildTransaction({
+          item,
+          session,
+          quantity,
+          transactionType: "move",
+          locationId,
+          shelfCode: destinationShelf.code,
+          notes:
+            notes ||
+            `Moved from shelf ${sourceShelfCode} to shelf ${destinationShelf.code}.`,
+          reasonCode: `from:${sourceShelfCode}`,
+          previousValue: {
+            source: sourcePreviousValue,
+            destination: destinationPreviousValue
+          },
+          newValue: {
+            source: sourceInventory,
+            destination: destinationInventory
+          },
+          status: destinationInventory.status
+        });
+        appendTransactionAndAudit(
+          database,
+          transaction,
+          buildAudit({
+            actionType: "move",
+            session,
+            locationId,
+            quantity,
+            item,
+            shelfCode: destinationShelf.code,
+            notes:
+              notes ||
+              `Moved from shelf ${sourceShelfCode} to shelf ${destinationShelf.code}.`,
+            previousValue: {
+              source: sourcePreviousValue,
+              destination: destinationPreviousValue
+            },
+            newValue: {
+              source: sourceInventory,
+              destination: destinationInventory
+            }
+          })
+        );
+        await writeDatabase(database);
+        return {
+          message: "Stock moved successfully.",
+          item,
+          inventory: destinationInventory,
+          transaction
+        };
+      }
+
       case "damage-item": {
         const quantity = parseQuantity(payload.quantity);
         const shelfCode = parseText(payload.shelfCode, "Shelf");
@@ -563,18 +673,27 @@ const localRepository: Repository = {
           quantity,
           "Quantity cannot exceed available stock."
         );
+        const damageOutcome = parseText(
+          payload.damageOutcome,
+          "Damage outcome"
+        ) as DamageRecord["damageOutcome"];
         const previousValue = { ...inventory };
         inventory.quantityAvailable -= quantity;
-        inventory.quantityDamaged += quantity;
-        inventory.status = "damaged";
+        if (damageOutcome === "to repair") {
+          inventory.quantityDamagedToRepair += quantity;
+        } else {
+          inventory.quantityDamagedBeyondRepair += quantity;
+        }
         inventory.lastUpdatedAt = new Date().toISOString();
+        syncInventoryStatus(inventory);
         const damage: DamageRecord = {
           damageId: createId("damage"),
           itemId: item!.itemId,
           locationId,
           shelfCode,
           quantity,
-          damageReason: parseText(payload.damageReason, "Damage reason"),
+          damageOutcome,
+          damageReason: damageOutcome,
           notes,
           createdBy: session.userId,
           createdByName: session.fullName,
@@ -589,10 +708,10 @@ const localRepository: Repository = {
           locationId,
           shelfCode,
           notes,
-          reasonCode: damage.damageReason,
+          reasonCode: damage.damageOutcome,
           previousValue,
           newValue: inventory,
-          status: "damaged"
+          status: inventory.status
         });
         appendTransactionAndAudit(
           database,
@@ -610,34 +729,41 @@ const localRepository: Repository = {
           })
         );
         await writeDatabase(database);
-        return { message: "Damage saved and stock reduced.", item, inventory, damage, transaction };
+        return {
+          message: "Damage saved and stock reduced.",
+          item,
+          inventory,
+          damage,
+          transaction
+        };
       }
 
       case "repair-item": {
         const quantity = parseQuantity(payload.quantity);
         const shelfCode = parseText(payload.shelfCode, "Shelf");
-        const inventory = ensureInventory(database, item!, locationId, shelfCode);
+        const inventory = requireInventory(database, item!.itemId, locationId, shelfCode);
+        if (!inventory || !isRepairEligibleInventory(inventory)) {
+          throw new Error("Only damaged items can be repaired.");
+        }
         const repairStatus = parseText(payload.repairStatus, "Repair status") as RepairRecord["repairStatus"];
         const previousValue = { ...inventory };
 
-        if (repairStatus === "returned to stock" || repairStatus === "repaired") {
-          if (inventory.quantityUnderRepair < quantity) {
-            throw new Error("Not enough stock is currently under repair.");
-          }
-          inventory.quantityUnderRepair -= quantity;
-          inventory.quantityAvailable += quantity;
-          inventory.status = "stored";
-        } else {
-          checkAvailable(
-            inventory,
-            quantity,
-            "Quantity cannot exceed available stock."
-          );
-          inventory.quantityAvailable -= quantity;
-          inventory.quantityUnderRepair += quantity;
-          inventory.status = "under repair";
+        if (inventory.quantityDamagedToRepair < quantity) {
+          throw new Error("Quantity cannot exceed damaged stock awaiting repair.");
         }
+
+        if (repairStatus === "returned to stock" || repairStatus === "repaired") {
+          inventory.quantityDamagedToRepair -= quantity;
+          inventory.quantityAvailable += quantity;
+        } else if (repairStatus === "beyond repair") {
+          inventory.quantityDamagedToRepair -= quantity;
+          inventory.quantityDamagedBeyondRepair += quantity;
+        } else {
+          throw new Error("Repair status must be Returned to Stock or Beyond Repair.");
+        }
+
         inventory.lastUpdatedAt = new Date().toISOString();
+        syncInventoryStatus(inventory);
 
         const repair: RepairRecord = {
           repairId: createId("repair"),
@@ -645,9 +771,7 @@ const localRepository: Repository = {
           locationId,
           shelfCode,
           quantity,
-          repairReason: parseText(payload.repairReason, "Repair reason"),
           repairStatus,
-          assignedTo: parseText(payload.assignedTo, "Assigned to"),
           notes,
           createdBy: session.userId,
           createdByName: session.fullName,
@@ -659,13 +783,13 @@ const localRepository: Repository = {
           session,
           quantity,
           transactionType:
-            repairStatus === "returned to stock" || repairStatus === "repaired"
-              ? "repair complete"
-              : "repair intake",
+            repairStatus === "beyond repair"
+              ? "repair beyond repair"
+              : "repair returned to stock",
           locationId,
           shelfCode,
           notes,
-          reasonCode: repair.repairReason,
+          reasonCode: repair.repairStatus,
           previousValue,
           newValue: inventory,
           status: inventory.status
@@ -674,7 +798,10 @@ const localRepository: Repository = {
           database,
           transaction,
           buildAudit({
-            actionType: "repair",
+            actionType:
+              repairStatus === "beyond repair"
+                ? "repair beyond repair"
+                : "repair returned to stock",
             session,
             locationId,
             quantity,
@@ -780,12 +907,11 @@ const localRepository: Repository = {
           currentInventory.quantityPacked -= row.quantity;
           if (returnDisposition === "quarantine") {
             currentInventory.quantityQuarantined += row.quantity;
-            currentInventory.status = "quarantined";
           } else {
             currentInventory.quantityAvailable += row.quantity;
-            currentInventory.status = "unpacked";
           }
           currentInventory.lastUpdatedAt = new Date().toISOString();
+          syncInventoryStatus(currentInventory);
           orderItem.unpackedQuantity = Number(orderItem.unpackedQuantity || 0) + row.quantity;
 
           const unpack: UnpackRecord = {

@@ -295,8 +295,8 @@ function makeTransactions(now: Date): TransactionRecord[] {
       userName: "Admin User",
       role: "admin",
       timestamp: iso(subHours(now, 1)),
-      reasonCode: "PKG-DMG",
-      status: "damaged"
+      reasonCode: "to repair",
+      status: "damaged (to repair)"
     },
     {
       transactionId: "txn_5",
@@ -304,7 +304,7 @@ function makeTransactions(now: Date): TransactionRecord[] {
       itemName: "Reinforced Surgical Gown",
       sku: "RZ-GOWN-011",
       upc: "5011741641687",
-      transactionType: "repair intake",
+      transactionType: "repair returned to stock",
       quantity: 4,
       locationId: "loc_pune-repair-qa-hub",
       shelfCode: "R1",
@@ -312,8 +312,8 @@ function makeTransactions(now: Date): TransactionRecord[] {
       userName: "Warehouse Operator",
       role: "operator",
       timestamp: iso(subHours(now, 5)),
-      reasonCode: "REPAIR",
-      status: "under repair"
+      reasonCode: "returned to stock",
+      status: "stored"
     }
   ];
 }
@@ -384,7 +384,7 @@ function makeQualityChecks(now: Date): QualityCheckRecord[] {
       checklistTemplateId: "qt_gowns",
       result: "hold",
       defectCategory: "stitching quality",
-      disposition: "repair",
+      disposition: "quarantine",
       notes: "Minor seam issue found during inspection.",
       checkedBy: "user_supervisor",
       checkedByName: "Supervisor User",
@@ -421,7 +421,8 @@ function makeDamageLog(now: Date): DamageRecord[] {
       locationId: "loc_bengaluru-main-hub",
       shelfCode: "A5",
       quantity: 3,
-      damageReason: "torn packaging",
+      damageOutcome: "to repair",
+      damageReason: "to repair",
       notes: "Outer wrapper split during shelf handling.",
       createdBy: "user_admin",
       createdByName: "Admin User",
@@ -438,10 +439,8 @@ function makeRepairLog(now: Date): RepairRecord[] {
       locationId: "loc_pune-repair-qa-hub",
       shelfCode: "R1",
       quantity: 4,
-      repairReason: "Stitching issue",
-      repairStatus: "in repair",
-      assignedTo: "Repair Team A",
-      notes: "Awaiting seam reinforcement.",
+      repairStatus: "returned to stock",
+      notes: "Seam reinforcement completed and returned to stock.",
       createdBy: "user_supervisor",
       createdByName: "Supervisor User",
       updatedAt: iso(subHours(now, 5))
@@ -594,7 +593,7 @@ export function createSeedDatabase(): DatabaseShape {
   const uploadedFiles = makeUploadedFiles(now);
 
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     users,
     roles: makeRoles(),
     locations: imported.locations,

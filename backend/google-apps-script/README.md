@@ -6,13 +6,13 @@ This folder contains the Google Sheets backend deliverables for IQMS for RZ-Circ
 
 - Keep Google Sheets behind a clean API layer
 - Avoid hard-coding column positions in the frontend
-- Support future Google Drive file storage for PO photos and packing slip PDFs
+- Support Google Drive file storage for PO photos
 - Provide a migration step between the demo build and a fuller production backend
 
 ## Included here
 
 - `SheetSchema.md`: current sheet/tab structure for IQMS
-- `Code.gs`: Apps Script scaffold with route handlers for dashboard, search, receive with quick quality decisions, pack, damage, repair, unpack, file metadata, and PDF slip generation
+- `Code.gs`: Apps Script scaffold with route handlers for dashboard, search, receive with quick quality decisions, move, pack, damage, repair, unpack, file metadata, and packing slip data access
 - `appsscript.json`: deployment metadata
 
 ## Current state
@@ -26,9 +26,10 @@ The live demo in this workspace uses the local repository by default. The Apps S
 - inventory reads
 - transactions and audit trail
 - grouped receipts with direct shelf placement and quick quality results
+- shelf-to-shelf stock moves
 - packing orders and PDF logging
 - uploaded file metadata
-- Google Drive-backed PO photos and packing slips when folder IDs are configured
+- Google Drive-backed PO photos when an upload folder ID is configured
 
 ## Recommended production approach
 
@@ -47,7 +48,6 @@ The live demo in this workspace uses the local repository by default. The Apps S
    - `SPREADSHEET_ID`
    - `API_TOKEN`
    - `UPLOADS_FOLDER_ID` if PO photos should be stored in Drive
-   - `PDF_FOLDER_ID` if packing slips should be stored in Drive
 5. Deploy as a Web App
 6. Copy the deployment URL into `.env` as `GOOGLE_APPS_SCRIPT_URL`
 7. Set `GOOGLE_APPS_SCRIPT_TOKEN`
@@ -56,7 +56,10 @@ The live demo in this workspace uses the local repository by default. The Apps S
 ## Current operational model
 
 - `Receive` combines PO capture, quick quality decision, and direct shelf placement.
+- `Move` handles shelf-to-shelf transfers for available stock.
 - `Search` is one unified screen for shelf search and item search.
+- `Damage Item` only uses `To Repair` and `Beyond Repair`.
+- `Repair Item` only works against repair-eligible damaged stock.
 - `Inbound` and `Cycle Count` are not part of the current UI flow.
 - Shelf entry is scan-first and dropdown-backed across shelf-based workflows.
 

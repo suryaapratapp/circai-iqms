@@ -3,6 +3,7 @@ import path from "path";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { createId } from "@/lib/utils/id";
 import { buildImportedInventoryFromFile } from "@/lib/data/import";
+import { isBlockedForPacking, syncInventoryStatus } from "@/lib/data/inventory";
 import { readDatabase, writeDatabase } from "@/lib/data/local-db";
 import { buildAudit, buildTransaction, findShelf, requireItemByCode } from "@/lib/data/repository";
 import type {
@@ -147,7 +148,7 @@ export async function createReceipt(
       quantityReceived: number;
       shelfCode: string;
       qualityResult: "pass" | "fail" | "hold";
-      disposition?: "quarantine" | "damaged" | "repair";
+      disposition?: "damaged-to-repair" | "damaged-beyond-repair";
       defectCategory?: string;
       batchLot?: string;
       expiryDate?: string;
@@ -207,6 +208,8 @@ export async function createReceipt(
         quantityOnHand: 0,
         quantityAvailable: 0,
         quantityDamaged: 0,
+        quantityDamagedToRepair: 0,
+        quantityDamagedBeyondRepair: 0,
         quantityUnderRepair: 0,
         quantityPacked: 0,
         quantityPendingInbound: 0,
@@ -228,20 +231,23 @@ export async function createReceipt(
     inventory.quantityPendingInbound = 0;
     if (line.qualityResult === "pass") {
       inventory.quantityAvailable += line.quantityReceived;
-      inventory.status = "quality passed";
-    } else if (line.qualityResult === "fail" && line.disposition === "damaged") {
-      inventory.quantityDamaged += line.quantityReceived;
-      inventory.status = "damaged";
-    } else if (line.qualityResult === "fail" && line.disposition === "repair") {
-      inventory.quantityUnderRepair += line.quantityReceived;
-      inventory.status = "under repair";
+    } else if (
+      line.qualityResult === "fail" &&
+      line.disposition === "damaged-to-repair"
+    ) {
+      inventory.quantityDamagedToRepair += line.quantityReceived;
+    } else if (
+      line.qualityResult === "fail" &&
+      line.disposition === "damaged-beyond-repair"
+    ) {
+      inventory.quantityDamagedBeyondRepair += line.quantityReceived;
     } else {
       inventory.quantityQuarantined += line.quantityReceived;
-      inventory.status = line.qualityResult === "hold" ? "quarantined" : "quality failed";
     }
     inventory.batchLot = line.batchLot || inventory.batchLot;
     inventory.expiryDate = line.expiryDate || inventory.expiryDate;
     inventory.lastUpdatedAt = new Date().toISOString();
+    syncInventoryStatus(inventory);
 
     const qualityCheck: QualityCheckRecord = {
       qualityCheckId: createId("qc"),
@@ -252,8 +258,7 @@ export async function createReceipt(
       checklistTemplateId: "receive-quick-check",
       result: line.qualityResult,
       defectCategory: line.defectCategory,
-      disposition:
-        line.qualityResult === "fail" ? line.disposition || "quarantine" : undefined,
+      disposition: line.qualityResult === "fail" ? line.disposition : undefined,
       notes: line.notes,
       checkedBy: session.userId,
       checkedByName: session.fullName,
@@ -352,12 +357,7 @@ export async function createPackingOrder(
       ),
       `Stock for ${item.sku} was not found on shelf ${shelf.code}.`
     );
-    if (
-      inventory.status === "damaged" ||
-      inventory.status === "under repair" ||
-      inventory.status === "quality failed" ||
-      inventory.status === "quarantined"
-    ) {
+    if (isBlockedForPacking(inventory)) {
       throw new Error(`${item.itemName} cannot be packed from its current status.`);
     }
     if (inventory.quantityAvailable < row.quantity) {
@@ -367,8 +367,8 @@ export async function createPackingOrder(
     const previousValue = { ...inventory };
     inventory.quantityAvailable -= row.quantity;
     inventory.quantityPacked += row.quantity;
-    inventory.status = "packed";
     inventory.lastUpdatedAt = new Date().toISOString();
+    syncInventoryStatus(inventory);
 
     items.push({
       packingOrderItemId: createId("packing-item"),
@@ -394,7 +394,7 @@ export async function createPackingOrder(
         referenceNumber: orderNumber,
         previousValue,
         newValue: inventory,
-        status: "packed"
+        status: inventory.status
       })
     );
     database.auditTrail.unshift(

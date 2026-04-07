@@ -156,6 +156,8 @@ export function buildImportedInventory(
       quantityOnHand: row.quantity,
       quantityAvailable: row.quantity,
       quantityDamaged: 0,
+      quantityDamagedToRepair: 0,
+      quantityDamagedBeyondRepair: 0,
       quantityUnderRepair: 0,
       quantityPacked: 0,
       quantityPendingInbound: 0,

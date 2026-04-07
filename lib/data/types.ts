@@ -9,6 +9,8 @@ export type InventoryStatus =
   | "quality passed"
   | "quality failed"
   | "damaged"
+  | "damaged (to repair)"
+  | "damaged (beyond repair)"
   | "under repair"
   | "ready to pack"
   | "packed"
@@ -25,6 +27,7 @@ export type RepairStatus =
 export type PackingOrderStatus = "packed" | "partially unpacked" | "unpacked";
 export type WorkflowType =
   | "receive"
+  | "move"
   | "damage-item"
   | "repair-item"
   | "packing"
@@ -117,6 +120,8 @@ export interface InventoryRecord {
   quantityOnHand: number;
   quantityAvailable: number;
   quantityDamaged: number;
+  quantityDamagedToRepair: number;
+  quantityDamagedBeyondRepair: number;
   quantityUnderRepair: number;
   quantityPacked: number;
   quantityPendingInbound: number;
@@ -200,7 +205,7 @@ export interface QualityCheckRecord {
   checklistTemplateId: string;
   result: QualityResult;
   defectCategory?: string;
-  disposition?: "quarantine" | "damaged" | "repair";
+  disposition?: "quarantine" | "damaged-to-repair" | "damaged-beyond-repair";
   notes?: string;
   checkedBy: string;
   checkedByName: string;
@@ -231,7 +236,8 @@ export interface DamageRecord {
   locationId: string;
   shelfCode?: string;
   quantity: number;
-  damageReason: string;
+  damageOutcome: "to repair" | "beyond repair";
+  damageReason?: string;
   notes?: string;
   createdBy: string;
   createdByName: string;
@@ -244,9 +250,9 @@ export interface RepairRecord {
   locationId: string;
   shelfCode?: string;
   quantity: number;
-  repairReason: string;
   repairStatus: RepairStatus;
-  assignedTo: string;
+  repairReason?: string;
+  assignedTo?: string;
   notes?: string;
   createdBy: string;
   createdByName: string;

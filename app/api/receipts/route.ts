@@ -9,7 +9,7 @@ const lineSchema = z.object({
   quantityReceived: z.number().positive(),
   shelfCode: z.string().min(1),
   qualityResult: z.enum(["pass", "fail", "hold"]),
-  disposition: z.enum(["quarantine", "damaged", "repair"]).optional(),
+  disposition: z.enum(["damaged-to-repair", "damaged-beyond-repair"]).optional(),
   defectCategory: z.string().optional(),
   batchLot: z.string().optional(),
   expiryDate: z.string().optional(),

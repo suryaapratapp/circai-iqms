@@ -30,81 +30,50 @@ export const workflowDefinitions: Record<WorkflowType, WorkflowDefinition> = {
   receive: {
     key: "receive",
     title: "Receive",
-    description: "Use the dedicated PO-first receipt flow for grouped receiving.",
+    description: "Use the dedicated PO-first receipt flow for grouped receiving with quick quality decisions.",
     badge: "Dock intake",
     rules: [
       "Open the dedicated receipt screen to capture Supplier Name, PO Number, and multiple receipt lines.",
       "PO photos can be uploaded and linked to the grouped receipt.",
-      "Received stock is grouped by PO and queued for quality or putaway."
+      "Received stock is placed directly onto the selected shelf with a pass, fail, or hold result."
+    ],
+    fields: []
+  },
+  move: {
+    key: "move",
+    title: "Move",
+    description: "Move available stock from one shelf to another without losing shelf-level traceability.",
+    badge: "Shelf move",
+    rules: [
+      "Only available stock can be moved.",
+      "Source and destination shelves must be different.",
+      "The movement updates both shelf records and keeps the audit trail."
     ],
     fields: []
   },
   "damage-item": {
     key: "damage-item",
     title: "Damage Item",
-    description: "Capture damage reasons and stock reduction without losing traceability.",
-    badge: "Exception flow",
+    description: "Use the dedicated damage flow to move stock into repair-eligible or beyond-repair damage.",
+    badge: "Damage control",
     rules: [
-      "Damaged stock moves out of available inventory immediately.",
-      "Critical issues can be flagged for supervisor review.",
-      "Reason capture is required for sensitive stock changes."
+      "Open the dedicated damage screen to choose a damage outcome and reduce available shelf stock.",
+      "To Repair keeps the stock eligible for the repair workflow.",
+      "Beyond Repair keeps the stock out of normal availability."
     ],
-    fields: [
-      { name: "locationId", label: "Location", type: "select", optionsSource: "locations" },
-      { name: "code", label: "Scan item", type: "scan", placeholder: "Scan item to mark damaged" },
-      { name: "quantity", label: "Damaged quantity", type: "number", placeholder: "0" },
-      {
-        name: "damageType",
-        label: "Damage type",
-        type: "select",
-        options: [
-          { label: "Torn packaging", value: "torn packaging" },
-          { label: "Contamination", value: "contamination" },
-          { label: "Stitching issue", value: "stitching issue" },
-          { label: "Fabric damage", value: "fabric damage" },
-          { label: "Label issue", value: "label issue" },
-          { label: "Transport damage", value: "transport damage" },
-          { label: "Shelf damage", value: "shelf damage" },
-          { label: "Unknown", value: "unknown" }
-        ]
-      },
-      { name: "shelfCode", label: "Shelf", type: "text", placeholder: "Scan or enter shelf" },
-      { name: "reasonCode", label: "Reason code", type: "select", optionsSource: "reasonCodes" },
-      { name: "notes", label: "Notes", type: "textarea", placeholder: "Add context for review and audit" }
-    ]
+    fields: []
   },
   "repair-item": {
     key: "repair-item",
     title: "Repair Item",
-    description: "Send stock to repair, monitor status, and return units safely to available stock.",
+    description: "Use the dedicated repair flow for damaged stock only.",
     badge: "Repair loop",
     rules: [
-      "Items under repair are blocked from packing and shelf moves.",
-      "Returned units are only re-enabled when repair completes.",
-      "Technician ownership improves follow-up for SME teams."
+      "Only damaged stock marked To Repair can be processed here.",
+      "Returned to Stock restores the quantity to available stock on the same shelf.",
+      "Beyond Repair moves the quantity into beyond-repair damage on that shelf."
     ],
-    fields: [
-      { name: "locationId", label: "Location", type: "select", optionsSource: "locations" },
-      { name: "code", label: "Scan item", type: "scan", placeholder: "Scan item for repair flow" },
-      { name: "quantity", label: "Quantity", type: "number", placeholder: "0" },
-      { name: "shelfCode", label: "Shelf", type: "text", placeholder: "Shelf if relevant" },
-      { name: "repairReason", label: "Repair reason", type: "text", placeholder: "Stitching issue / relabelling / rework" },
-      {
-        name: "repairStatus",
-        label: "Repair status",
-        type: "select",
-        options: [
-          { label: "Pending repair", value: "pending repair" },
-          { label: "In repair", value: "in repair" },
-          { label: "Repaired", value: "repaired" },
-          { label: "Beyond repair", value: "beyond repair" },
-          { label: "Returned to stock", value: "returned to stock" },
-        ]
-      },
-      { name: "assignedTo", label: "Assigned to", type: "text", placeholder: "Assigned person" },
-      { name: "reasonCode", label: "Reason code", type: "select", optionsSource: "reasonCodes" },
-      { name: "notes", label: "Notes", type: "textarea", placeholder: "Repair notes or observations" }
-    ]
+    fields: []
   },
   packing: {
     key: "packing",

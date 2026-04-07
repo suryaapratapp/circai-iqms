@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { syncInventoryStatus } from "@/lib/data/inventory";
 import { createSeedDatabase } from "@/lib/data/seed";
 import type { DatabaseShape } from "@/lib/data/types";
 
@@ -21,7 +22,7 @@ export async function readDatabase(): Promise<DatabaseShape> {
   const content = await fs.readFile(databaseFile, "utf8");
   const parsed = JSON.parse(content) as Partial<DatabaseShape>;
   if (
-    parsed.schemaVersion !== 4 ||
+    parsed.schemaVersion !== 5 ||
     !Array.isArray(parsed.roles) ||
     !Array.isArray(parsed.receipts) ||
     !Array.isArray(parsed.packingOrders)
@@ -31,6 +32,34 @@ export async function readDatabase(): Promise<DatabaseShape> {
     return fresh;
   }
   const database = parsed as DatabaseShape;
+  database.inventory = (database.inventory || []).map((record) => {
+    const quantityDamaged = Number(record.quantityDamaged || 0);
+    const quantityUnderRepair = Number(record.quantityUnderRepair || 0);
+    const quantityDamagedToRepair =
+      typeof record.quantityDamagedToRepair === "number"
+        ? Number(record.quantityDamagedToRepair || 0)
+        : record.status === "under repair"
+          ? quantityUnderRepair
+          : quantityDamaged;
+    const quantityDamagedBeyondRepair =
+      typeof record.quantityDamagedBeyondRepair === "number"
+        ? Number(record.quantityDamagedBeyondRepair || 0)
+        : 0;
+
+    return syncInventoryStatus({
+      ...record,
+      quantityAvailable: Number(record.quantityAvailable || 0),
+      quantityOnHand: Number(record.quantityOnHand || 0),
+      quantityDamaged,
+      quantityDamagedToRepair,
+      quantityDamagedBeyondRepair,
+      quantityUnderRepair: 0,
+      quantityPacked: Number(record.quantityPacked || 0),
+      quantityPendingInbound: Number(record.quantityPendingInbound || 0),
+      quantityQuarantined: Number(record.quantityQuarantined || 0),
+      lastUpdatedAt: record.lastUpdatedAt || record.createdAt || new Date().toISOString()
+    });
+  });
   database.packingOrderItems = (database.packingOrderItems || []).map((item) => ({
     ...item,
     unpackedQuantity: Number(item.unpackedQuantity || 0)

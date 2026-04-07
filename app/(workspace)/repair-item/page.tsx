@@ -1,16 +1,18 @@
-import { WorkflowModule } from "@/components/workflows/workflow-module";
+import { RepairModule } from "@/components/workflows/repair-module";
+import { getRepository } from "@/lib/data";
 import { getCachedSession, getCachedWorkflowLookups } from "@/lib/data/server";
 
 export default async function RepairItemPage() {
-  const [session, lookups] = await Promise.all([
-    getCachedSession(),
-    getCachedWorkflowLookups("repair-item")
+  const session = await getCachedSession();
+  const [lookups, rows] = await Promise.all([
+    getCachedWorkflowLookups("repair-item"),
+    getRepository().listInventory(session)
   ]);
   return (
-    <WorkflowModule
+    <RepairModule
       initialLocationId={session.assignedLocationId}
       lookups={lookups}
-      workflow="repair-item"
+      rows={rows}
     />
   );
 }

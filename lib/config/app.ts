@@ -11,10 +11,10 @@ export const appConfig = {
   supportedRoles: ["admin", "supervisor", "operator"] as const,
   transactionTypes: [
     "receive",
-    "shelf move",
+    "move",
     "damage",
-    "repair intake",
-    "repair complete",
+    "repair returned to stock",
+    "repair beyond repair",
     "pack",
     "unpack",
     "quality pass",

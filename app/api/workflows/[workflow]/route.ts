@@ -4,6 +4,7 @@ import { getServerSession } from "@/lib/auth/session";
 import type { WorkflowType } from "@/lib/data/types";
 
 const supportedWorkflows: WorkflowType[] = [
+  "move",
   "damage-item",
   "repair-item",
   "packing",

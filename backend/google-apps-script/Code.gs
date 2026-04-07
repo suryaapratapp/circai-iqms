@@ -253,6 +253,8 @@ function routeRequest_(path, method, payload) {
 
     case "receiveStock":
       return receiveStock_(payload);
+    case "moveItem":
+      return moveItem_(payload);
     case "damageItem":
       return damageItem_(payload);
     case "repairItem":
@@ -701,7 +703,7 @@ function getItems_() {
 
 function getInventory_() {
   return getRecords_(CONFIG.SHEETS.INVENTORY).map(function (record) {
-    return {
+    const inventory = {
       inventoryId: String(record.inventoryId || ""),
       itemId: String(record.itemId || ""),
       locationId: String(record.locationId || ""),
@@ -710,7 +712,14 @@ function getInventory_() {
       quantityOnHand: parseNumber_(record.quantityOnHand, 0),
       quantityAvailable: parseNumber_(record.quantityAvailable, 0),
       quantityDamaged: parseNumber_(record.quantityDamaged, 0),
-      quantityUnderRepair: parseNumber_(record.quantityUnderRepair, 0),
+      quantityDamagedToRepair: parseNumber_(
+        record.quantityDamagedToRepair,
+        record.status === "under repair"
+          ? parseNumber_(record.quantityUnderRepair, 0)
+          : parseNumber_(record.quantityDamaged, 0)
+      ),
+      quantityDamagedBeyondRepair: parseNumber_(record.quantityDamagedBeyondRepair, 0),
+      quantityUnderRepair: 0,
       quantityPacked: parseNumber_(record.quantityPacked, 0),
       quantityPendingInbound: parseNumber_(record.quantityPendingInbound, 0),
       quantityQuarantined: parseNumber_(record.quantityQuarantined, 0),
@@ -722,7 +731,68 @@ function getInventory_() {
       createdAt: String(record.createdAt || ""),
       lastUpdatedAt: String(record.lastUpdatedAt || "")
     };
+    return syncInventoryStatus_(inventory);
   });
+}
+
+function getDamagedToRepairQuantity_(inventory) {
+  return parseNumber_(inventory.quantityDamagedToRepair, 0);
+}
+
+function getDamagedBeyondRepairQuantity_(inventory) {
+  return parseNumber_(inventory.quantityDamagedBeyondRepair, 0);
+}
+
+function getTotalDamagedQuantity_(inventory) {
+  return (
+    getDamagedToRepairQuantity_(inventory) +
+    getDamagedBeyondRepairQuantity_(inventory)
+  );
+}
+
+function isRepairEligibleInventory_(inventory) {
+  return getDamagedToRepairQuantity_(inventory) > 0;
+}
+
+function syncInventoryBuckets_(inventory) {
+  inventory.quantityDamaged = getTotalDamagedQuantity_(inventory);
+  inventory.quantityUnderRepair = 0;
+  return inventory;
+}
+
+function deriveInventoryStatus_(inventory) {
+  if (
+    parseNumber_(inventory.quantityPacked, 0) > 0 &&
+    parseNumber_(inventory.quantityAvailable, 0) <= 0
+  ) {
+    return "packed";
+  }
+  if (parseNumber_(inventory.quantityAvailable, 0) > 0) {
+    return "stored";
+  }
+  if (parseNumber_(inventory.quantityQuarantined, 0) > 0) {
+    return "quarantined";
+  }
+  if (getDamagedToRepairQuantity_(inventory) > 0) {
+    return "damaged (to repair)";
+  }
+  if (getDamagedBeyondRepairQuantity_(inventory) > 0) {
+    return "damaged (beyond repair)";
+  }
+  if (parseNumber_(inventory.quantityOnHand, 0) > 0) {
+    return "received";
+  }
+  return "stored";
+}
+
+function syncInventoryStatus_(inventory) {
+  syncInventoryBuckets_(inventory);
+  inventory.status = deriveInventoryStatus_(inventory);
+  return inventory;
+}
+
+function isBlockedForPacking_(inventory) {
+  return inventory.status === "quarantined" || inventory.status === "quality failed";
 }
 
 function getTransactionsRaw_() {
@@ -795,6 +865,7 @@ function getDamageLog_() {
       locationId: String(record.locationId || ""),
       shelfCode: record.shelfCode ? String(record.shelfCode) : "",
       quantity: parseNumber_(record.quantity, 0),
+      damageOutcome: String(record.damageOutcome || record.damageReason || ""),
       damageReason: String(record.damageReason || ""),
       notes: record.notes ? String(record.notes) : "",
       createdBy: String(record.createdBy || ""),
@@ -1152,6 +1223,8 @@ function ensureInventoryRecord_(item, locationId, shelfCode, batchLot, expiryDat
     quantityOnHand: 0,
     quantityAvailable: 0,
     quantityDamaged: 0,
+    quantityDamagedToRepair: 0,
+    quantityDamagedBeyondRepair: 0,
     quantityUnderRepair: 0,
     quantityPacked: 0,
     quantityPendingInbound: 0,
@@ -1165,11 +1238,13 @@ function ensureInventoryRecord_(item, locationId, shelfCode, batchLot, expiryDat
     lastUpdatedAt: new Date().toISOString()
   };
 
+  syncInventoryStatus_(inventory);
   appendRecord_(CONFIG.SHEETS.INVENTORY, inventory);
   return inventory;
 }
 
 function saveInventory_(inventory) {
+  syncInventoryStatus_(inventory);
   updateRecord_(CONFIG.SHEETS.INVENTORY, "inventoryId", inventory.inventoryId, inventory);
 }
 
@@ -1354,6 +1429,7 @@ function getDashboard_(session) {
     admin: [
       { href: "/receive", label: "Receive" },
       { href: "/search", label: "Search" },
+      { href: "/move", label: "Move" },
       { href: "/damage-item", label: "Damage Item" },
       { href: "/repair-item", label: "Repair Item" },
       { href: "/packing", label: "Pack Order" },
@@ -1364,6 +1440,7 @@ function getDashboard_(session) {
     supervisor: [
       { href: "/receive", label: "Receive" },
       { href: "/search", label: "Search" },
+      { href: "/move", label: "Move" },
       { href: "/damage-item", label: "Damage Item" },
       { href: "/repair-item", label: "Repair Item" },
       { href: "/packing", label: "Pack Order" },
@@ -1374,6 +1451,7 @@ function getDashboard_(session) {
     operator: [
       { href: "/receive", label: "Receive" },
       { href: "/search", label: "Search" },
+      { href: "/move", label: "Move" },
       { href: "/damage-item", label: "Damage Item" },
       { href: "/repair-item", label: "Repair Item" },
       { href: "/packing", label: "Pack Order" }
@@ -1397,8 +1475,7 @@ function getDashboard_(session) {
         value: rows.reduce(function (sum, row) {
           return (
             sum +
-            Number(row.inventory.quantityDamaged || 0) +
-            Number(row.inventory.quantityUnderRepair || 0) +
+            getTotalDamagedQuantity_(row.inventory) +
             Number(row.inventory.quantityQuarantined || 0)
           );
         }, 0)
@@ -1526,11 +1603,6 @@ function getReports_(session) {
     repairItems: scopeRecords_(getRepairLog_(), activeSession, "locationId"),
     qualityResults: scopeRecords_(getQualityChecks_(), activeSession, "locationId"),
     userActivity: getTransactions_(activeSession),
-    dailyTransactions: getTransactions_(activeSession).filter(function (transaction) {
-      return (
-        new Date(transaction.timestamp).toDateString() === new Date().toDateString()
-      );
-    }),
     packingOrders: scopeRecords_(getPackingOrders_(), activeSession, "locationId")
   };
 }
@@ -1675,23 +1747,18 @@ function receiveStock_(payload) {
     inventory.expiryDate = line.expiryDate || inventory.expiryDate;
     if (normalise_(line.qualityResult) === "pass") {
       inventory.quantityAvailable += quantityReceived;
-      inventory.status = "quality passed";
     } else if (
       normalise_(line.qualityResult) === "fail" &&
-      normalise_(line.disposition) === "damaged"
+      normalise_(line.disposition) === "damaged-to-repair"
     ) {
-      inventory.quantityDamaged += quantityReceived;
-      inventory.status = "damaged";
+      inventory.quantityDamagedToRepair += quantityReceived;
     } else if (
       normalise_(line.qualityResult) === "fail" &&
-      normalise_(line.disposition) === "repair"
+      normalise_(line.disposition) === "damaged-beyond-repair"
     ) {
-      inventory.quantityUnderRepair += quantityReceived;
-      inventory.status = "under repair";
+      inventory.quantityDamagedBeyondRepair += quantityReceived;
     } else {
       inventory.quantityQuarantined += quantityReceived;
-      inventory.status =
-        normalise_(line.qualityResult) === "hold" ? "quarantined" : "quality failed";
     }
     inventory.lastUpdatedAt = new Date().toISOString();
     saveInventory_(inventory);
@@ -1707,7 +1774,7 @@ function receiveStock_(payload) {
       defectCategory: line.defectCategory ? String(line.defectCategory) : "",
       disposition:
         normalise_(line.qualityResult) === "fail"
-          ? String(line.disposition || "quarantine")
+          ? String(line.disposition || "")
           : "",
       notes: line.notes ? String(line.notes) : "",
       checkedBy: session.userId,
@@ -1727,7 +1794,7 @@ function receiveStock_(payload) {
       qualityResult: String(line.qualityResult || ""),
       disposition:
         normalise_(line.qualityResult) === "fail"
-          ? String(line.disposition || "quarantine")
+          ? String(line.disposition || "")
           : "",
       defectCategory: line.defectCategory ? String(line.defectCategory) : "",
       batchLot: line.batchLot ? String(line.batchLot) : "",
@@ -1783,10 +1850,14 @@ function damageItem_(payload) {
   }
 
   requireAvailable_(inventory, quantity, "Quantity cannot exceed available stock.");
+  const damageOutcome = parseText_(data.damageOutcome, "Damage outcome");
   const previousValue = cloneObject_(inventory);
   inventory.quantityAvailable -= quantity;
-  inventory.quantityDamaged += quantity;
-  inventory.status = "damaged";
+  if (normalise_(damageOutcome) === "to repair") {
+    inventory.quantityDamagedToRepair += quantity;
+  } else {
+    inventory.quantityDamagedBeyondRepair += quantity;
+  }
   inventory.lastUpdatedAt = new Date().toISOString();
   saveInventory_(inventory);
 
@@ -1796,7 +1867,8 @@ function damageItem_(payload) {
     locationId: locationId,
     shelfCode: shelfCode,
     quantity: quantity,
-    damageReason: parseText_(data.damageReason || data.damageType, "Damage reason"),
+    damageOutcome: normalise_(damageOutcome),
+    damageReason: normalise_(damageOutcome),
     notes: data.notes ? String(data.notes) : "",
     createdBy: session.userId,
     createdByName: session.fullName,
@@ -1812,10 +1884,10 @@ function damageItem_(payload) {
     locationId: locationId,
     shelfCode: shelfCode,
     notes: data.notes || "",
-    reasonCode: damage.damageReason,
+    reasonCode: damage.damageOutcome,
     previousValue: previousValue,
     newValue: inventory,
-    status: "damaged"
+    status: inventory.status
   });
 
   appendAudit_({
@@ -1839,6 +1911,104 @@ function damageItem_(payload) {
   };
 }
 
+function moveItem_(payload) {
+  const data = unwrapPayload_(payload);
+  const session = requireSession_(payload.session || data.session);
+  const locationId = resolveLocationId_(session, data.locationId);
+  const item = findItemByCode_(parseText_(data.code, "Item"));
+  if (!item) {
+    throw new Error("Item not found for the scanned code.");
+  }
+
+  const quantity = parsePositiveNumber_(data.quantity, "Quantity");
+  const sourceShelfCode = parseText_(data.shelfCode, "Current shelf");
+  const destinationShelfCode = parseText_(data.destinationShelfCode, "Destination shelf");
+
+  if (normalise_(sourceShelfCode) === normalise_(destinationShelfCode)) {
+    throw new Error("Source and destination shelf must be different.");
+  }
+
+  const destinationShelf = findShelfByCode_(destinationShelfCode, locationId);
+  if (!destinationShelf) {
+    throw new Error("Destination shelf is not recognised.");
+  }
+
+  const sourceInventory = findInventoryRecord_(item.itemId, locationId, sourceShelfCode);
+  if (!sourceInventory) {
+    throw new Error("Item was not found on the selected source shelf.");
+  }
+
+  requireAvailable_(
+    sourceInventory,
+    quantity,
+    "Quantity cannot exceed available stock on the source shelf."
+  );
+
+  const sourcePreviousValue = cloneObject_(sourceInventory);
+  sourceInventory.quantityAvailable -= quantity;
+  sourceInventory.quantityOnHand -= quantity;
+  sourceInventory.lastUpdatedAt = new Date().toISOString();
+  saveInventory_(sourceInventory);
+
+  const destinationInventory = ensureInventoryRecord_(item, locationId, destinationShelf.code);
+  const destinationPreviousValue = cloneObject_(destinationInventory);
+  destinationInventory.shelfId = destinationShelf.shelfId;
+  destinationInventory.shelfCode = destinationShelf.code;
+  destinationInventory.quantityAvailable += quantity;
+  destinationInventory.quantityOnHand += quantity;
+  destinationInventory.lastUpdatedAt = new Date().toISOString();
+  saveInventory_(destinationInventory);
+
+  const note =
+    data.notes ||
+    "Moved from shelf " + sourceShelfCode + " to shelf " + destinationShelf.code + ".";
+
+  const transaction = appendTransaction_({
+    item: item,
+    session: session,
+    quantity: quantity,
+    transactionType: "move",
+    locationId: locationId,
+    shelfCode: destinationShelf.code,
+    notes: note,
+    reasonCode: "from:" + sourceShelfCode,
+    previousValue: {
+      source: sourcePreviousValue,
+      destination: destinationPreviousValue
+    },
+    newValue: {
+      source: sourceInventory,
+      destination: destinationInventory
+    },
+    status: destinationInventory.status
+  });
+
+  appendAudit_({
+    actionType: "move",
+    session: session,
+    locationId: locationId,
+    quantity: quantity,
+    item: item,
+    shelfCode: destinationShelf.code,
+    notes: note,
+    previousValue: {
+      source: sourcePreviousValue,
+      destination: destinationPreviousValue
+    },
+    newValue: {
+      source: sourceInventory,
+      destination: destinationInventory
+    }
+  });
+
+  return {
+    message: "Stock moved successfully.",
+    item: item,
+    inventory: destinationInventory,
+    transaction: transaction
+  };
+}
+
 function repairItem_(payload) {
   const data = unwrapPayload_(payload);
   const session = requireSession_(payload.session || data.session);
@@ -1850,22 +2020,25 @@ function repairItem_(payload) {
 
   const quantity = parsePositiveNumber_(data.quantity, "Quantity");
   const shelfCode = parseText_(data.shelfCode, "Shelf");
-  const inventory = ensureInventoryRecord_(item, locationId, shelfCode);
+  const inventory = findInventoryRecord_(item.itemId, locationId, shelfCode);
+  if (!inventory || !isRepairEligibleInventory_(inventory)) {
+    throw new Error("Only damaged items can be repaired.");
+  }
   const repairStatus = parseText_(data.repairStatus, "Repair status");
   const previousValue = cloneObject_(inventory);
 
+  if (getDamagedToRepairQuantity_(inventory) < quantity) {
+    throw new Error("Quantity cannot exceed damaged stock awaiting repair.");
+  }
+
   if (repairStatus === "returned to stock" || repairStatus === "repaired") {
-    if (inventory.quantityUnderRepair < quantity) {
-      throw new Error("Not enough stock is currently under repair.");
-    }
-    inventory.quantityUnderRepair -= quantity;
+    inventory.quantityDamagedToRepair -= quantity;
     inventory.quantityAvailable += quantity;
-    inventory.status = "stored";
+  } else if (repairStatus === "beyond repair") {
+    inventory.quantityDamagedToRepair -= quantity;
+    inventory.quantityDamagedBeyondRepair += quantity;
   } else {
-    requireAvailable_(inventory, quantity, "Quantity cannot exceed available stock.");
-    inventory.quantityAvailable -= quantity;
-    inventory.quantityUnderRepair += quantity;
-    inventory.status = "under repair";
+    throw new Error("Repair status must be Returned to Stock or Beyond Repair.");
   }
   inventory.lastUpdatedAt = new Date().toISOString();
   saveInventory_(inventory);
@@ -1876,9 +2049,9 @@ function repairItem_(payload) {
     locationId: locationId,
     shelfCode: shelfCode,
     quantity: quantity,
-    repairReason: parseText_(data.repairReason, "Repair reason"),
+    repairReason: "",
     repairStatus: repairStatus,
-    assignedTo: parseText_(data.assignedTo, "Assigned to"),
+    assignedTo: "",
     notes: data.notes ? String(data.notes) : "",
     createdBy: session.userId,
     createdByName: session.fullName,
@@ -1891,20 +2064,23 @@ function repairItem_(payload) {
     session: session,
     quantity: quantity,
     transactionType:
-      repairStatus === "returned to stock" || repairStatus === "repaired"
-        ? "repair complete"
-        : "repair intake",
+      repairStatus === "beyond repair"
+        ? "repair beyond repair"
+        : "repair returned to stock",
     locationId: locationId,
     shelfCode: shelfCode,
     notes: data.notes || "",
-    reasonCode: repair.repairReason,
+    reasonCode: repair.repairStatus,
     previousValue: previousValue,
     newValue: inventory,
     status: inventory.status
   });
 
   appendAudit_({
-    actionType: "repair",
+    actionType:
+      repairStatus === "beyond repair"
+        ? "repair beyond repair"
+        : "repair returned to stock",
     session: session,
     locationId: locationId,
     quantity: quantity,
@@ -2128,11 +2304,7 @@ function packOrder_(payload) {
       throw new Error("Stock for " + item.sku + " was not found on shelf " + shelf.code + ".");
     }
 
-    if (
-      ["damaged", "under repair", "quality failed", "quarantined"].indexOf(
-        inventory.status
-      ) > -1
-    ) {
+    if (isBlockedForPacking_(inventory)) {
       throw new Error(item.itemName + " cannot be packed from its current status.");
     }
 
@@ -2142,7 +2314,6 @@ function packOrder_(payload) {
     const previousValue = cloneObject_(inventory);
     inventory.quantityAvailable -= quantity;
     inventory.quantityPacked += quantity;
-    inventory.status = "packed";
     inventory.lastUpdatedAt = new Date().toISOString();
     saveInventory_(inventory);
 
@@ -2171,7 +2342,7 @@ function packOrder_(payload) {
       referenceNumber: orderNumber,
       previousValue: previousValue,
       newValue: inventory,
-      status: "packed"
+      status: inventory.status
     });
 
     appendAudit_({
@@ -2393,6 +2564,8 @@ function importInventory_(payload) {
         quantityOnHand: entry.units,
         quantityAvailable: entry.units,
         quantityDamaged: 0,
+        quantityDamagedToRepair: 0,
+        quantityDamagedBeyondRepair: 0,
         quantityUnderRepair: 0,
         quantityPacked: 0,
         quantityPendingInbound: 0,

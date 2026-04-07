@@ -1,4 +1,11 @@
 import { appConfig } from "@/lib/config/app";
+import {
+  deriveInventoryStatus,
+  getDamagedBeyondRepairQuantity,
+  getDamagedToRepairQuantity,
+  getTotalDamagedQuantity,
+  syncInventoryStatus
+} from "@/lib/data/inventory";
 import { createId } from "@/lib/utils/id";
 import type {
   AuditRecord,
@@ -79,7 +86,6 @@ export interface ReportsData {
   repairItems: RepairRecord[];
   qualityResults: QualityCheckRecord[];
   userActivity: TransactionRecord[];
-  dailyTransactions: TransactionRecord[];
   packingOrders: PackingOrderRecord[];
 }
 
@@ -228,6 +234,13 @@ export function getWorkflowLookupRequirements(workflow: WorkflowType) {
         includeReasonCodes: false,
         includeQualityTemplates: false
       };
+    case "move":
+      return {
+        includeShelves: true,
+        includeItems: true,
+        includeReasonCodes: false,
+        includeQualityTemplates: false
+      };
     case "packing":
       return {
         includeShelves: true,
@@ -357,3 +370,11 @@ export function getVarianceThreshold(database: DatabaseShape) {
       ?.value ?? appConfig.cycleCountVarianceThreshold
   );
 }
+
+export {
+  deriveInventoryStatus,
+  getDamagedBeyondRepairQuantity,
+  getDamagedToRepairQuantity,
+  getTotalDamagedQuantity,
+  syncInventoryStatus
+};

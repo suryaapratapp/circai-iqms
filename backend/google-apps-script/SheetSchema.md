@@ -18,7 +18,7 @@ Create one spreadsheet and add these tabs with the exact headers below.
 `itemId,sku,upc,qrCode,itemName,description,category,unitOfMeasure,packSize,imageUrl,reorderThreshold,status,supplier,batchLot,expiryDate,requiresQualityCheck,createdAt,updatedAt`
 
 ## Inventory
-`inventoryId,itemId,locationId,shelfId,shelfCode,quantityOnHand,quantityAvailable,quantityDamaged,quantityUnderRepair,quantityPacked,quantityPendingInbound,quantityQuarantined,reorderThreshold,supplier,batchLot,expiryDate,status,createdAt,lastUpdatedAt`
+`inventoryId,itemId,locationId,shelfId,shelfCode,quantityOnHand,quantityAvailable,quantityDamaged,quantityDamagedToRepair,quantityDamagedBeyondRepair,quantityUnderRepair,quantityPacked,quantityPendingInbound,quantityQuarantined,reorderThreshold,supplier,batchLot,expiryDate,status,createdAt,lastUpdatedAt`
 
 ## Transactions
 `transactionId,itemId,itemName,sku,upc,transactionType,quantity,locationId,shelfCode,userId,userName,role,timestamp,notes,referenceNumber,reasonCode,previousValue,newValue,status`
@@ -36,19 +36,19 @@ Create one spreadsheet and add these tabs with the exact headers below.
 `qualityCheckId,itemId,inventoryId,locationId,shelfCode,checklistTemplateId,result,defectCategory,disposition,notes,checkedBy,checkedByName,checkedAt,photoFileId`
 
 ## DamageLog
-`damageId,itemId,locationId,shelfCode,quantity,damageReason,notes,createdBy,createdByName,createdAt`
+`damageId,itemId,locationId,shelfCode,quantity,damageOutcome,damageReason,notes,createdBy,createdByName,createdAt`
 
 ## RepairLog
 `repairId,itemId,locationId,shelfCode,quantity,repairReason,repairStatus,assignedTo,notes,createdBy,createdByName,updatedAt`
 
 ## PackingOrders
-`packingOrderId,orderNumber,locationId,packedBy,packedByName,packedAt,notes,totalLines,totalQuantity,pdfFileId`
+`packingOrderId,orderNumber,locationId,packedBy,packedByName,packedAt,status,notes,totalLines,totalQuantity,unpackedQuantity,pdfFileId,updatedAt`
 
 ## PackingOrderItems
-`packingOrderItemId,packingOrderId,itemId,sku,upc,productName,shelfCode,quantity`
+`packingOrderItemId,packingOrderId,itemId,sku,upc,productName,shelfCode,quantity,unpackedQuantity`
 
 ## UnpackLog
-`unpackId,itemId,locationId,shelfCode,quantity,unpackReason,returnDisposition,notes,unpackedBy,unpackedByName,unpackedAt`
+`unpackId,itemId,packingOrderId,packingOrderItemId,orderNumber,locationId,shelfCode,quantity,unpackReason,returnDisposition,notes,unpackedBy,unpackedByName,unpackedAt`
 
 ## Settings
 `settingId,key,value,description`
@@ -73,4 +73,8 @@ Create one spreadsheet and add these tabs with the exact headers below.
 - Use `Units` as the normal quantity unit for imported RZ-Circular stock.
 - If the `Users` sheet is empty on first Apps Script request, the demo bootstrap seeds the three RZ-Circular demo users plus matching roles and locations automatically.
 - `quantityPendingInbound` remains in `Inventory` only for backwards compatibility. In the current simplified receive flow it should remain `0`.
+- `quantityDamagedToRepair` and `quantityDamagedBeyondRepair` are now the important damaged stock buckets. The older `quantityDamaged` column is still kept and is synchronised automatically for backwards compatibility.
+- `Repair Item` should only operate on inventory rows where `quantityDamagedToRepair > 0`.
+- `Receive` fail dispositions should now only write `damaged-to-repair` or `damaged-beyond-repair`.
+- `Move` should write a normal transaction row with `transactionType = move`.
 - `CycleCounts` is no longer required by the current frontend flow. Keep the tab only if you need historical data or a later custom counting process.

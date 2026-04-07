@@ -252,6 +252,7 @@ const appsScriptRepository: Repository = {
   ) {
     const pathByWorkflow: Record<WorkflowType, string> = {
       receive: "receiveStock",
+      move: "moveItem",
       "damage-item": "damageItem",
       "repair-item": "repairItem",
       packing: "packOrder",

@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { InventoryListItem } from "@/lib/data/repository";
+import {
+  getDamagedBeyondRepairQuantity,
+  getDamagedToRepairQuantity
+} from "@/lib/data/inventory";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { inputClassName } from "@/components/ui/field";
@@ -135,13 +139,22 @@ export function InventoryBoard({
             <Detail label="Shelf" value={selected.inventory.shelfCode || "Pending"} />
             <Detail label="On hand" value={formatQuantity(selected.inventory.quantityOnHand)} />
             <Detail label="Available" value={formatQuantity(selected.inventory.quantityAvailable)} />
-            <Detail label="Damaged" value={formatQuantity(selected.inventory.quantityDamaged)} />
-            <Detail label="Under repair" value={formatQuantity(selected.inventory.quantityUnderRepair)} />
+            <Detail
+              label="Damaged to repair"
+              value={formatQuantity(getDamagedToRepairQuantity(selected.inventory))}
+            />
+            <Detail
+              label="Beyond repair"
+              value={formatQuantity(getDamagedBeyondRepairQuantity(selected.inventory))}
+            />
             <Detail label="Packed" value={formatQuantity(selected.inventory.quantityPacked)} />
             <Detail label="Batch / lot" value={selected.inventory.batchLot || "-"} />
             <Detail label="Expiry" value={selected.inventory.expiryDate || "-"} />
           </div>
           <div className="mt-6 flex flex-wrap gap-3">
+            <Link href="/move" prefetch={false}>
+              <Button variant="ghost">Move</Button>
+            </Link>
             <Link href="/repair-item" prefetch={false}>
               <Button variant="ghost">Repair</Button>
             </Link>

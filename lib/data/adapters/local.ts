@@ -285,7 +285,9 @@ const localRepository: Repository = {
 
   async getDashboard(session): Promise<DashboardData> {
     const database = await readDatabase();
-    const rows = rowsForSession(database, session);
+    const scopedInventory = database.inventory.filter((record) =>
+      session.locationIds.includes(record.locationId)
+    );
     const recentActivity = database.transactions
       .filter((record) => session.locationIds.includes(record.locationId))
       .sort((left, right) => right.timestamp.localeCompare(left.timestamp))
@@ -330,19 +332,19 @@ const localRepository: Repository = {
       summaryStrip: [
         {
           label: "Stock lines",
-          value: rows.length
+          value: scopedInventory.length
         },
         {
           label: "Available units",
-          value: rows.reduce((sum, row) => sum + row.inventory.quantityAvailable, 0)
+          value: scopedInventory.reduce((sum, row) => sum + row.quantityAvailable, 0)
         },
         {
           label: "Held stock",
-          value: rows.reduce(
+          value: scopedInventory.reduce(
             (sum, row) =>
               sum +
-              row.inventory.quantityQuarantined +
-              getTotalDamagedQuantity(row.inventory),
+              row.quantityQuarantined +
+              getTotalDamagedQuantity(row),
             0
           )
         }
@@ -399,6 +401,24 @@ const localRepository: Repository = {
           googleLinked
         }))
     };
+  },
+
+  async suggestItems(query, _session, options) {
+    const database = await readDatabase();
+    const normalized = normalizeText(query);
+    const limit = Math.max(1, Math.min(Number(options?.limit || 12), 25));
+
+    if (!normalized) {
+      return database.items.slice(0, limit);
+    }
+
+    return database.items
+      .filter((item) =>
+        [item.itemName, item.sku, item.upc, item.qrCode]
+          .filter(Boolean)
+          .some((value) => normalizeText(String(value)).includes(normalized))
+      )
+      .slice(0, limit);
   },
 
   async searchShelf(code, session): Promise<SearchShelfResult> {
@@ -463,19 +483,19 @@ const localRepository: Repository = {
       inventoryOnHand: rowsForSession(database, session),
       damagedItems: database.damageLog.filter((record) =>
         session.locationIds.includes(record.locationId)
-      ),
+      ).slice(0, 80),
       repairItems: database.repairLog.filter((record) =>
         session.locationIds.includes(record.locationId)
-      ),
+      ).slice(0, 80),
       qualityResults: database.qualityChecks.filter((record) =>
         session.locationIds.includes(record.locationId)
-      ),
+      ).slice(0, 80),
       userActivity: database.transactions.filter((record) =>
         session.locationIds.includes(record.locationId)
-      ),
+      ).sort((left, right) => right.timestamp.localeCompare(left.timestamp)).slice(0, 160),
       packingOrders: database.packingOrders.filter((record) =>
         session.locationIds.includes(record.locationId)
-      )
+      ).sort((left, right) => right.packedAt.localeCompare(left.packedAt)).slice(0, 120)
     };
   },
 
@@ -499,17 +519,20 @@ const localRepository: Repository = {
     };
   },
 
-  async listTransactions(session) {
+  async listTransactions(session, options) {
     const database = await readDatabase();
-    return database.transactions
+    const rows = database.transactions
       .filter((record) => session.locationIds.includes(record.locationId))
       .sort((left, right) => right.timestamp.localeCompare(left.timestamp));
+    const limit = Number(options?.limit || 0);
+    return limit > 0 ? rows.slice(0, limit) : rows;
   },
 
-  async listPackedOrders(session) {
+  async listPackedOrders(session, options) {
     const database = await readDatabase();
-    return database.packingOrders
+    const rows = database.packingOrders
       .filter((record) => session.locationIds.includes(record.locationId))
+      .sort((left, right) => right.packedAt.localeCompare(left.packedAt))
       .map((order) => ({
         order,
         itemCount: database.packingOrderItems.filter(
@@ -517,6 +540,8 @@ const localRepository: Repository = {
         ).length,
         packedByName: order.packedByName
       }));
+    const limit = Number(options?.limit || 0);
+    return limit > 0 ? rows.slice(0, limit) : rows;
   },
 
   async getPackedOrder(packingOrderId, session) {

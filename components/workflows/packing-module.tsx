@@ -152,7 +152,6 @@ export function PackingModule({
               <div className="grid gap-4 md:grid-cols-3">
                 <Field label="Scan Item">
                   <ItemSelect
-                    items={lookups.items || []}
                     onChange={(value) =>
                       setRows((current) =>
                         current.map((entry, rowIndex) =>
@@ -161,6 +160,7 @@ export function PackingModule({
                       )
                     }
                     placeholder="Scan, search, or select item"
+                    remoteSearch
                     value={row.code}
                   />
                 </Field>

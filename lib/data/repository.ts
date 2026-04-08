@@ -159,14 +159,25 @@ export interface Repository {
     workflow: WorkflowType
   ): Promise<WorkflowLookupsData>;
   getLookups(session: SessionUser): Promise<LookupsData>;
+  suggestItems(
+    query: string,
+    session: SessionUser,
+    options?: { limit?: number }
+  ): Promise<ItemRecord[]>;
   searchShelf(code: string, session: SessionUser): Promise<SearchShelfResult>;
   searchItem(query: string, session: SessionUser): Promise<SearchItemResult>;
   listInventory(session: SessionUser): Promise<InventoryListItem[]>;
   getInventoryItem(itemId: string, session: SessionUser): Promise<SearchItemResult>;
   getReports(session: SessionUser): Promise<ReportsData>;
   getAdminData(session: SessionUser): Promise<AdminData>;
-  listTransactions(session: SessionUser): Promise<TransactionRecord[]>;
-  listPackedOrders(session: SessionUser): Promise<PackedOrderListItem[]>;
+  listTransactions(
+    session: SessionUser,
+    options?: { limit?: number }
+  ): Promise<TransactionRecord[]>;
+  listPackedOrders(
+    session: SessionUser,
+    options?: { limit?: number }
+  ): Promise<PackedOrderListItem[]>;
   getPackedOrder(
     packingOrderId: string,
     session: SessionUser
@@ -230,21 +241,21 @@ export function getWorkflowLookupRequirements(workflow: WorkflowType) {
     case "receive":
       return {
         includeShelves: true,
-        includeItems: true,
+        includeItems: false,
         includeReasonCodes: false,
         includeQualityTemplates: false
       };
     case "move":
       return {
         includeShelves: true,
-        includeItems: true,
+        includeItems: false,
         includeReasonCodes: false,
         includeQualityTemplates: false
       };
     case "packing":
       return {
         includeShelves: true,
-        includeItems: true,
+        includeItems: false,
         includeReasonCodes: false,
         includeQualityTemplates: false
       };
@@ -253,8 +264,8 @@ export function getWorkflowLookupRequirements(workflow: WorkflowType) {
     case "unpack":
       return {
         includeShelves: true,
-        includeItems: true,
-        includeReasonCodes: true,
+        includeItems: false,
+        includeReasonCodes: false,
         includeQualityTemplates: false
       };
     default:

@@ -8,11 +8,12 @@ export default async function DamageItemPage() {
     getCachedWorkflowLookups("damage-item"),
     getRepository().listInventory(session)
   ]);
+  const availableRows = rows.filter((row) => row.inventory.quantityAvailable > 0);
   return (
     <DamageModule
       initialLocationId={session.assignedLocationId}
       lookups={lookups}
-      rows={rows}
+      rows={availableRows}
     />
   );
 }

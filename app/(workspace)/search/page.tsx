@@ -1,7 +1,7 @@
 import { SearchModule } from "@/components/workflows/search-module";
-import { getCachedLookups } from "@/lib/data/server";
+import { getCachedWorkflowLookups } from "@/lib/data/server";
 
 export default async function SearchPage() {
-  const lookups = await getCachedLookups();
+  const lookups = await getCachedWorkflowLookups("move");
   return <SearchModule lookups={lookups} />;
 }

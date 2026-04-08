@@ -25,7 +25,7 @@ type SearchMode = "item" | "shelf";
 export function SearchModule({
   lookups
 }: {
-  lookups: Pick<LookupsData, "items" | "shelves">;
+  lookups: Pick<LookupsData, "shelves"> | { shelves?: LookupsData["shelves"] };
 }) {
   const [mode, setMode] = useState<SearchMode>("item");
   const [itemQuery, setItemQuery] = useState("");
@@ -107,7 +107,6 @@ export function SearchModule({
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
               <div>
                 <ItemSelect
-                  items={lookups.items || []}
                   onBlur={() => {
                     if (itemQuery) {
                       void runSearch("item", itemQuery);
@@ -125,6 +124,7 @@ export function SearchModule({
                     }
                   }}
                   placeholder="Scan, search, or select item"
+                  remoteSearch
                   value={itemQuery}
                 />
               </div>

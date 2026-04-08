@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import dynamic from "next/dynamic";
+import { useMemo, useState } from "react";
 import { ScanLine } from "lucide-react";
 import type { ShelfRecord } from "@/lib/data/types";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { ScannerModal } from "@/components/workflows/scanner-modal";
+
+const ScannerModal = dynamic(
+  () => import("@/components/workflows/scanner-modal").then((module) => module.ScannerModal),
+  { ssr: false }
+);
 
 export function ShelfInput({
   shelves,
@@ -19,6 +24,20 @@ export function ShelfInput({
   placeholder?: string;
 }) {
   const [scannerOpen, setScannerOpen] = useState(false);
+  const options = useMemo(
+    () =>
+      shelves.map((shelf) => ({
+        value: shelf.code,
+        label: shelf.code,
+        description: [shelf.zone, shelf.aisle, shelf.rack, shelf.shelf]
+          .filter(Boolean)
+          .join(" • "),
+        searchText: [shelf.code, shelf.zone, shelf.aisle, shelf.rack, shelf.shelf]
+          .filter(Boolean)
+          .join(" ")
+      })),
+    [shelves]
+  );
 
   return (
     <div className="flex gap-3">
@@ -26,16 +45,7 @@ export function ShelfInput({
         className="flex-1"
         emptyMessage="No matching shelves."
         onChange={onChange}
-        options={shelves.map((shelf) => ({
-          value: shelf.code,
-          label: shelf.code,
-          description: [shelf.zone, shelf.aisle, shelf.rack, shelf.shelf]
-            .filter(Boolean)
-            .join(" • "),
-          searchText: [shelf.code, shelf.zone, shelf.aisle, shelf.rack, shelf.shelf]
-            .filter(Boolean)
-            .join(" ")
-        }))}
+        options={options}
         placeholder={placeholder}
         value={value}
       />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { inputClassName } from "@/components/ui/field";
@@ -32,9 +32,10 @@ export function SearchableSelect({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const deferredValue = useDeferredValue(value);
 
   const filteredOptions = useMemo(() => {
-    const query = value.trim().toLowerCase();
+    const query = deferredValue.trim().toLowerCase();
     if (!query) {
       return options.slice(0, 10);
     }
@@ -45,7 +46,7 @@ export function SearchableSelect({
           .some((field) => String(field).toLowerCase().includes(query))
       )
       .slice(0, 10);
-  }, [options, value]);
+  }, [deferredValue, options]);
 
   return (
     <div className={cn("relative", className)}>

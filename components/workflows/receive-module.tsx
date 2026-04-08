@@ -345,7 +345,6 @@ export function ReceiveModule({
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="Scan item or search SKU">
                     <ItemSelect
-                      items={lookups.items || []}
                       onBlur={() => {
                         if (line.code) {
                           void fillItem(index, line.code);
@@ -363,6 +362,7 @@ export function ReceiveModule({
                         }
                       }}
                       placeholder="Scan, search, or select item"
+                      remoteSearch
                       value={line.code}
                     />
                   </Field>

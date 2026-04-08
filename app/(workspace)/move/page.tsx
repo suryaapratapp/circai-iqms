@@ -8,12 +8,13 @@ export default async function MovePage() {
     getCachedWorkflowLookups("move"),
     getRepository().listInventory(session)
   ]);
+  const availableRows = rows.filter((row) => row.inventory.quantityAvailable > 0);
 
   return (
     <MoveModule
       initialLocationId={session.assignedLocationId}
       lookups={lookups}
-      rows={rows}
+      rows={availableRows}
     />
   );
 }

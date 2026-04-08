@@ -4,6 +4,6 @@ import { getCachedSession } from "@/lib/data/server";
 
 export default async function PackedOrdersPage() {
   const session = await getCachedSession();
-  const orders = await getRepository().listPackedOrders(session);
+  const orders = await getRepository().listPackedOrders(session, { limit: 120 });
   return <PackedOrdersList orders={orders} />;
 }

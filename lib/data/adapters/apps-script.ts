@@ -17,6 +17,7 @@ import type {
 import { getWorkflowLookupRequirements } from "@/lib/data/repository";
 import { verifyPassword } from "@/lib/auth/password";
 import type {
+  ItemRecord,
   LocationRecord,
   SessionUser,
   TransactionRecord,
@@ -191,6 +192,16 @@ const appsScriptRepository: Repository = {
       body: JSON.stringify({ session })
     });
   },
+  suggestItems(query: string, session: SessionUser, options?: { limit?: number }) {
+    return cachedRequest<ItemRecord[]>("suggestItems", 60 * 1000, {
+      method: "POST",
+      body: JSON.stringify({
+        query,
+        session,
+        limit: options?.limit || 12
+      })
+    });
+  },
   searchShelf(code: string, session: SessionUser) {
     return request<SearchShelfResult>("searchByShelf", {
       method: "POST",
@@ -204,19 +215,19 @@ const appsScriptRepository: Repository = {
     });
   },
   listInventory(session: SessionUser) {
-    return request<InventoryListItem[]>("getInventory", {
+    return cachedRequest<InventoryListItem[]>("getInventory", 20 * 1000, {
       method: "POST",
       body: JSON.stringify({ session })
     });
   },
   getInventoryItem(itemId: string, session: SessionUser) {
-    return request<SearchItemResult>("getInventoryItem", {
+    return cachedRequest<SearchItemResult>("getInventoryItem", 20 * 1000, {
       method: "POST",
       body: JSON.stringify({ itemId, session })
     });
   },
   getReports(session: SessionUser) {
-    return request<ReportsData>("getReports", {
+    return cachedRequest<ReportsData>("getReports", 20 * 1000, {
       method: "POST",
       body: JSON.stringify({ session })
     });
@@ -227,16 +238,16 @@ const appsScriptRepository: Repository = {
       body: JSON.stringify({ session })
     });
   },
-  listTransactions(session: SessionUser) {
+  listTransactions(session: SessionUser, options?: { limit?: number }) {
     return cachedRequest<TransactionRecord[]>("getTransactions", 15 * 1000, {
       method: "POST",
-      body: JSON.stringify({ session })
+      body: JSON.stringify({ session, limit: options?.limit || 0 })
     });
   },
-  listPackedOrders(session: SessionUser) {
+  listPackedOrders(session: SessionUser, options?: { limit?: number }) {
     return cachedRequest<PackedOrderListItem[]>("getPackedOrders", 15 * 1000, {
       method: "POST",
-      body: JSON.stringify({ session })
+      body: JSON.stringify({ session, limit: options?.limit || 0 })
     });
   },
   getPackedOrder(packingOrderId: string, session: SessionUser) {

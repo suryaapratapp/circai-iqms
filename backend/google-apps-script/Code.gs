@@ -225,6 +225,8 @@ function routeRequest_(path, method, payload) {
       return getScopedShelves_(payload.session);
     case "getProducts":
       return getItems_();
+    case "suggestItems":
+      return suggestItems_(payload.query, payload.session, payload.limit);
 
     case "getDashboard":
       return getDashboard_(payload.session);
@@ -245,9 +247,9 @@ function routeRequest_(path, method, payload) {
     case "getAdminData":
       return getAdminData_(payload.session);
     case "getTransactions":
-      return getTransactions_(payload.session);
+      return getTransactions_(payload.session, payload);
     case "getPackedOrders":
-      return getPackedOrders_(payload.session);
+      return getPackedOrders_(payload.session, payload);
     case "getPackedOrder":
       return getPackedOrder_(payload.packingOrderId, payload.session);
 
@@ -377,6 +379,7 @@ function isReferenceSheet_(sheetName) {
     CONFIG.SHEETS.ROLES,
     CONFIG.SHEETS.LOCATIONS,
     CONFIG.SHEETS.SHELVES,
+    CONFIG.SHEETS.PRODUCT_MASTER,
     CONFIG.SHEETS.QUALITY_TEMPLATES,
     CONFIG.SHEETS.REASON_CODES,
     CONFIG.SHEETS.SETTINGS
@@ -1106,12 +1109,15 @@ function rowsForSession_(session) {
     });
 }
 
-function getTransactions_(session) {
-  return scopeRecords_(getTransactionsRaw_(), requireSession_(session), "locationId").sort(
-    function (a, b) {
-      return String(b.timestamp).localeCompare(String(a.timestamp));
-    }
-  );
+function getTransactions_(session, payload) {
+  const activeSession = requireSession_(session);
+  const limit = parseNumber_(payload && payload.limit, 0);
+  if (limit > 0) {
+    return getRecentTransactions_(activeSession, limit);
+  }
+  return scopeRecords_(getTransactionsRaw_(), activeSession, "locationId").sort(function (a, b) {
+    return String(b.timestamp).localeCompare(String(a.timestamp));
+  });
 }
 
 function getRecentTransactions_(session, limit) {
@@ -1423,7 +1429,9 @@ function updateLastLogin_(payload) {
 
 function getDashboard_(session) {
   const activeSession = requireSession_(session);
-  const rows = rowsForSession_(activeSession);
+  const scopedInventory = getInventory_().filter(function (record) {
+    return activeSession.locationIds.indexOf(record.locationId) > -1;
+  });
   const recentActivity = getRecentTransactions_(activeSession, 10);
   const quickActionsByRole = {
     admin: [
@@ -1462,21 +1470,21 @@ function getDashboard_(session) {
     summaryStrip: [
       {
         label: "Stock lines",
-        value: rows.length
+        value: scopedInventory.length
       },
       {
         label: "Available units",
-        value: rows.reduce(function (sum, row) {
-          return sum + Number(row.inventory.quantityAvailable || 0);
+        value: scopedInventory.reduce(function (sum, row) {
+          return sum + Number(row.quantityAvailable || 0);
         }, 0)
       },
       {
         label: "Held stock",
-        value: rows.reduce(function (sum, row) {
+        value: scopedInventory.reduce(function (sum, row) {
           return (
             sum +
-            getTotalDamagedQuantity_(row.inventory) +
-            Number(row.inventory.quantityQuarantined || 0)
+            getTotalDamagedQuantity_(row) +
+            Number(row.quantityQuarantined || 0)
           );
         }, 0)
       }
@@ -1580,6 +1588,27 @@ function searchBySku_(query, session) {
   };
 }
 
+function suggestItems_(query, session, limit) {
+  requireSession_(session);
+  const normalized = normalise_(String(query || ""));
+  const maxResults = Math.max(1, Math.min(parseNumber_(limit, 12), 25));
+  const items = getItems_();
+
+  if (!normalized) {
+    return items.slice(0, maxResults);
+  }
+
+  return items
+    .filter(function (item) {
+      return [item.itemName, item.sku, item.upc, item.qrCode]
+        .filter(Boolean)
+        .some(function (value) {
+          return normalise_(value).indexOf(normalized) > -1;
+        });
+    })
+    .slice(0, maxResults);
+}
+
 function getInventoryItem_(itemId, session) {
   const activeSession = requireSession_(session);
   const item = getItems_().find(function (entry) {
@@ -1599,11 +1628,17 @@ function getReports_(session) {
   const activeSession = requireSession_(session);
   return {
     inventoryOnHand: rowsForSession_(activeSession),
-    damagedItems: scopeRecords_(getDamageLog_(), activeSession, "locationId"),
-    repairItems: scopeRecords_(getRepairLog_(), activeSession, "locationId"),
-    qualityResults: scopeRecords_(getQualityChecks_(), activeSession, "locationId"),
-    userActivity: getTransactions_(activeSession),
-    packingOrders: scopeRecords_(getPackingOrders_(), activeSession, "locationId")
+    damagedItems: scopeRecords_(getDamageLog_(), activeSession, "locationId").slice(0, 80),
+    repairItems: scopeRecords_(getRepairLog_(), activeSession, "locationId").slice(0, 80),
+    qualityResults: scopeRecords_(getQualityChecks_(), activeSession, "locationId")
+      .sort(function (a, b) {
+        return String(b.checkedAt).localeCompare(String(a.checkedAt));
+      })
+      .slice(0, 80),
+    userActivity: getTransactions_(activeSession, { limit: 160 }),
+    packingOrders: getPackedOrders_(activeSession, { limit: 120 }).map(function (entry) {
+      return entry.order;
+    })
   };
 }
 
@@ -1628,11 +1663,12 @@ function getAdminData_(session) {
   };
 }
 
-function getPackedOrders_(session) {
+function getPackedOrders_(session, payload) {
   const activeSession = requireSession_(session);
   const items = getPackingOrderItems_();
+  const limit = parseNumber_(payload && payload.limit, 0);
 
-  return scopeRecords_(getPackingOrders_(), activeSession, "locationId")
+  const rows = scopeRecords_(getPackingOrders_(), activeSession, "locationId")
     .sort(function (a, b) {
       return String(b.packedAt).localeCompare(String(a.packedAt));
     })
@@ -1645,6 +1681,7 @@ function getPackedOrders_(session) {
         packedByName: order.packedByName
       };
     });
+  return limit > 0 ? rows.slice(0, limit) : rows;
 }
 
 function getPackedOrder_(packingOrderId, session) {
